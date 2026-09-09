@@ -1,0 +1,396 @@
+/*
+ * Sovereign AI Workbench — Chat UI Styles
+ *
+ * Clean, professional dark theme.
+ * No excessive animations — just enough polish for a production-grade feel.
+ */
+
+/* ================================================
+   Reset & Globals
+   ================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Color palette */
+  --bg-primary: #0f1117;
+  --bg-secondary: #1a1d27;
+  --bg-tertiary: #252830;
+  --bg-user: #1e3a5f;
+  --bg-assistant: #1a1d27;
+  --bg-error: #3d1c1c;
+
+  --text-primary: #e4e4e7;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --accent-subtle: rgba(59, 130, 246, 0.15);
+
+  --border: #2d3039;
+  --border-light: #3d4049;
+
+  --success: #22c55e;
+  --danger: #ef4444;
+
+  /* Typography */
+  --font-main: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+
+  /* Spacing */
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+body {
+  font-family: var(--font-main);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ================================================
+   App Layout — full viewport, flexbox column
+   ================================================ */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ================================================
+   Header
+   ================================================ */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.header-badge {
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Status indicator dot */
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-ok {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.status-error {
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger);
+}
+
+/* Clear button */
+.clear-btn {
+  font-size: 0.8rem;
+  padding: 6px 14px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.clear-btn:hover:not(:disabled) {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.clear-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ================================================
+   Chat Area
+   ================================================ */
+
+.chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Scrollbar styling */
+.chat-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-area::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 3px;
+}
+
+/* ================================================
+   Empty State
+   ================================================ */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  flex: 1;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 8px;
+}
+
+.empty-state h2 {
+  font-size: 1.4rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.empty-state p {
+  font-size: 0.95rem;
+  max-width: 420px;
+}
+
+.empty-hint {
+  font-size: 0.85rem !important;
+  color: var(--text-muted) !important;
+  margin-top: 4px;
+}
+
+/* ================================================
+   Messages
+   ================================================ */
+
+.message {
+  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  max-width: 85%;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.message-user {
+  background: var(--bg-user);
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+
+.message-assistant {
+  background: var(--bg-assistant);
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+
+.message-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.message-model {
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.message-content {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+/* ================================================
+   Thinking Indicator
+   ================================================ */
+
+.thinking {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.dot-pulse {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50%      { opacity: 1;   transform: scale(1.2); }
+}
+
+/* ================================================
+   Error Banner
+   ================================================ */
+
+.error-banner {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--bg-error);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* ================================================
+   Input Area
+   ================================================ */
+
+.input-area {
+  display: flex;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.message-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  font-size: 0.95rem;
+  resize: none;
+  outline: none;
+  transition: border-color 0.15s ease;
+  line-height: 1.5;
+}
+
+.message-input::placeholder {
+  color: var(--text-muted);
+}
+
+.message-input:focus {
+  border-color: var(--accent);
+}
+
+.message-input:disabled {
+  opacity: 0.5;
+}
+
+/* Send button */
+.send-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-main);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  align-self: flex-end;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ================================================
+   Responsive
+   ================================================ */
+
+@media (max-width: 640px) {
+  .header {
+    padding: 12px 16px;
+  }
+
+  .header-title {
+    font-size: 1rem;
+  }
+
+  .chat-area {
+    padding: 16px;
+  }
+
+  .message {
+    max-width: 95%;
+  }
+
+  .input-area {
+    padding: 12px 16px;
+  }
+}

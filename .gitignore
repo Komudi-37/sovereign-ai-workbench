@@ -1,0 +1,46 @@
+# ===========================
+# Sovereign AI Workbench
+# .gitignore
+# ===========================
+
+# Environment variables (NEVER commit .env)
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Node.js / React
+node_modules/
+dist/
+build/
+
+# Generated files
+generated/
+cache/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local model files
+*.gguf
+*.bin
+*.safetensors
