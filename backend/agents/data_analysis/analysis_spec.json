@@ -1,0 +1,40 @@
+{
+  "numeric_columns": ["revenue", "cost"],
+  "date_column": "date",
+  "date_format": "%Y-%m-%d",
+  "calculations": [
+    {
+      "output": "profit",
+      "operation": "subtract",
+      "left": "revenue",
+      "right": "cost"
+    },
+    {
+      "output": "profit_margin_pct",
+      "operation": "percentage",
+      "left": "profit",
+      "right": "revenue"
+    }
+  ],
+  "trend_columns": ["revenue", "profit"],
+  "charts": [
+    {
+      "kind": "line",
+      "x": "date",
+      "y": "revenue",
+      "title": "Revenue over time"
+    },
+    {
+      "kind": "line",
+      "x": "date",
+      "y": "profit",
+      "title": "Profit over time"
+    },
+    {
+      "kind": "scatter",
+      "x": "cost",
+      "y": "revenue",
+      "title": "Cost versus revenue"
+    }
+  ]
+}
