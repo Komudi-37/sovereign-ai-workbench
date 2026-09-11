@@ -7,8 +7,6 @@ Architecture:
                 └── OllamaProvider  (concrete — talks to local Ollama)
 
 This abstraction keeps Ollama-specific HTTP details isolated.
-To add a new local provider later, create a new LLMProvider subclass
-and swap it into LLMService — no route changes needed.
 """
 
 import logging
@@ -22,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Abstract base — defines what any LLM provider must implement
+# Abstract base
 # ---------------------------------------------------------------------------
 
 class LLMProvider(ABC):
@@ -30,35 +28,15 @@ class LLMProvider(ABC):
 
     @abstractmethod
     async def generate(self, prompt: str, model: str) -> str:
-        """
-        Send a prompt to the LLM and return the generated text.
-
-        Args:
-            prompt: The user's message / prompt text.
-            model: The model identifier to use.
-
-        Returns:
-            The generated response text.
-
-        Raises:
-            LLMConnectionError: If the provider is unreachable.
-            LLMGenerationError: If generation fails for any reason.
-        """
         pass
 
     @abstractmethod
     async def health_check(self) -> bool:
-        """
-        Check if the provider is reachable and healthy.
-
-        Returns:
-            True if the provider is reachable, False otherwise.
-        """
         pass
 
 
 # ---------------------------------------------------------------------------
-# Custom exceptions — clean error handling without leaking internals
+# Custom exceptions
 # ---------------------------------------------------------------------------
 
 class LLMConnectionError(Exception):
@@ -72,20 +50,20 @@ class LLMGenerationError(Exception):
 
 
 # ---------------------------------------------------------------------------
-# Ollama provider — concrete implementation for local Ollama server
+# Ollama provider
 # ---------------------------------------------------------------------------
 
 class OllamaProvider(LLMProvider):
-    """
-    Communicates with a local Ollama server via its HTTP API.
+    """Communicates with a local Ollama server via its HTTP API."""
 
-    Ollama API docs: https://github.com/ollama/ollama/blob/main/docs/api.md
-    """
-
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, timeout: int = 180):
         self.base_url = base_url.rstrip("/")
-        # Timeout: 30s connect, 300s read (local CPU inference can be slow)
-        self.timeout = httpx.Timeout(connect=30.0, read=300.0, write=30.0, pool=30.0)
+        self.timeout = httpx.Timeout(
+            connect=30.0,
+            read=float(timeout),
+            write=30.0,
+            pool=30.0,
+        )
 
     async def generate(self, prompt: str, model: str) -> str:
         """Send a prompt to Ollama and return the generated text."""
@@ -93,7 +71,11 @@ class OllamaProvider(LLMProvider):
         payload = {
             "model": model,
             "prompt": prompt,
-            "stream": False,  # Wait for full response (simpler for Milestone 1)
+            "stream": False,
+            "options": {
+                "num_predict": 256,
+                "temperature": 0.7,
+            },
         }
 
         logger.info("Sending request to Ollama (model: %s)", model)
@@ -113,15 +95,15 @@ class OllamaProvider(LLMProvider):
         except httpx.TimeoutException:
             logger.error("Ollama request timed out")
             raise LLMGenerationError(
-                "Ollama request timed out. The model may be too slow or not loaded. "
-                "Try running: ollama run qwen3:4b"
+                "Local model is still processing or not loaded. "
+                "This can take 30-120 seconds on CPU. "
+                "If this persists, try: ollama run " + model
             )
 
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             logger.error("Ollama returned HTTP %d", status)
 
-            # 404 usually means the model isn't installed
             if status == 404:
                 raise LLMGenerationError(
                     f"Model '{model}' not found in Ollama. "
@@ -133,10 +115,15 @@ class OllamaProvider(LLMProvider):
                 "Check Ollama logs for details."
             )
 
-        # Parse the response
         try:
             data = response.json()
-            generated_text = data.get("response", "")
+            generated_text = data.get("response", "").strip()
+
+            # Handle thinking models (such as Qwen3/DeepSeek) where output may be in thinking field
+            if not generated_text:
+                thinking_text = data.get("thinking", "").strip()
+                if thinking_text:
+                    generated_text = thinking_text
 
             if not generated_text:
                 logger.warning("Ollama returned an empty response")
@@ -150,11 +137,11 @@ class OllamaProvider(LLMProvider):
         except (ValueError, KeyError) as exc:
             logger.error("Unexpected Ollama response format: %s", exc)
             raise LLMGenerationError(
-                "Unexpected response format from Ollama. Check Ollama version and logs."
+                "Unexpected response format from Ollama."
             )
 
     async def health_check(self) -> bool:
-        """Check if Ollama is reachable by hitting its root endpoint."""
+        """Check if Ollama is reachable."""
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
                 response = await client.get(self.base_url)
@@ -162,59 +149,73 @@ class OllamaProvider(LLMProvider):
         except (httpx.ConnectError, httpx.TimeoutException):
             return False
 
+    async def generate_embeddings(self, text: str, model: str) -> list[float]:
+        """Generate embeddings using Ollama's /api/embed endpoint."""
+        url = f"{self.base_url}/api/embed"
+        payload = {"model": model, "input": text}
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                embeddings = data.get("embeddings", [[]])[0]
+                if not embeddings:
+                    raise LLMGenerationError("Empty embeddings returned")
+                return embeddings
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                raise LLMGenerationError(
+                    f"Embedding model '{model}' not found. "
+                    f"Pull it with: ollama pull {model}"
+                )
+            raise
+        except httpx.ConnectError:
+            raise LLMConnectionError("Cannot connect to Ollama for embeddings")
+
 
 # ---------------------------------------------------------------------------
-# LLM Service — facade used by the API layer
+# LLM Service — facade
 # ---------------------------------------------------------------------------
 
 class LLMService:
-    """
-    High-level service that API routes interact with.
-
-    Wraps an LLMProvider and adds configuration (model selection, etc.).
-    This is the ONLY class that API routes should import from this module.
-    """
+    """High-level service that API routes interact with."""
 
     def __init__(self, provider: LLMProvider, model: str):
         self.provider = provider
         self.model = model
 
     async def chat(self, message: str) -> tuple[str, str]:
-        """
-        Send a user message to the LLM and return the response.
-
-        Args:
-            message: The user's chat message.
-
-        Returns:
-            A tuple of (response_text, model_name).
-        """
+        """Send a user message and return (response_text, model_name)."""
         logger.info("Chat request — model: %s", self.model)
         response = await self.provider.generate(prompt=message, model=self.model)
         return response, self.model
 
+    async def generate(self, prompt: str, model: str = None) -> str:
+        """Generate text with an optionally specified model."""
+        model = model or self.model
+        return await self.provider.generate(prompt=prompt, model=model)
+
     async def health_check(self) -> bool:
-        """Check if the underlying LLM provider is healthy."""
         return await self.provider.health_check()
 
 
 # ---------------------------------------------------------------------------
-# Factory — creates the default LLMService from app settings
+# Factory
 # ---------------------------------------------------------------------------
 
 def create_llm_service() -> LLMService:
-    """
-    Create an LLMService configured from environment variables.
-
-    This is the single place where the provider choice is wired up.
-    To add a new provider later, add a conditional here.
-    """
-    provider = OllamaProvider(base_url=settings.ollama_base_url)
+    """Create an LLMService configured from environment variables."""
+    provider = OllamaProvider(
+        base_url=settings.ollama_base_url,
+        timeout=settings.ollama_timeout,
+    )
     service = LLMService(provider=provider, model=settings.ollama_model)
 
     logger.info(
-        "LLM service initialized — provider: Ollama, model: %s, url: %s",
+        "LLM service initialized — provider: Ollama, model: %s, url: %s, timeout: %ds",
         settings.ollama_model,
         settings.ollama_base_url,
+        settings.ollama_timeout,
     )
     return service

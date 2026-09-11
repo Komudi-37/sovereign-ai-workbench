@@ -4,99 +4,80 @@ Pydantic models for API request and response validation.
 These schemas define the contract between the React frontend and the FastAPI backend.
 """
 
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
 
+# ---------------------------------------------------------------------------
+# Chat
+# ---------------------------------------------------------------------------
+
 class ChatRequest(BaseModel):
     """Incoming chat message from the frontend."""
-    message: str = Field(
-        ...,
-        min_length=1,
-        max_length=10000,
-        description="The user's message to send to the AI model."
-    )
+    message: str = Field(..., min_length=1, max_length=10000)
+    session_id: Optional[str] = Field(None, description="Existing session ID to continue")
 
 
 class ChatResponse(BaseModel):
     """AI response returned to the frontend."""
-    response: str = Field(
-        ...,
-        description="The AI model's generated response."
-    )
-    model: str = Field(
-        ...,
-        description="The model that generated the response."
-    )
+    response: str
+    model: str
+    session_id: str = Field("", description="Session ID for conversation continuity")
 
+
+# ---------------------------------------------------------------------------
+# Health
+# ---------------------------------------------------------------------------
 
 class HealthResponse(BaseModel):
     """Health check response."""
-    status: str = Field(..., description="Overall system status.")
-    backend: str = Field(..., description="Backend server status.")
-    ollama: str = Field(..., description="Ollama server connectivity status.")
+    status: str
+    backend: str
+    database: str = "ok"
+    ollama: str
+    vector_store: str = "not_initialized"
 
 
 # ---------------------------------------------------------------------------
-# Workflow API schemas
+# Workflows
 # ---------------------------------------------------------------------------
 
-class WorkflowRequest(BaseModel):
+class WorkflowRunRequest(BaseModel):
     """Request to execute a workflow via the orchestrator."""
     instruction: str = Field(
-        ...,
-        min_length=1,
+        default="",
         max_length=10000,
-        description="User instruction describing the desired task.",
+        description="User instruction (legacy field).",
+    )
+    message: Optional[str] = Field(
+        None,
+        max_length=10000,
+        description="User message (preferred field).",
     )
     files: list[str] = Field(
         default_factory=list,
-        description="Optional list of file paths to process.",
+        description="Direct file paths (legacy).",
+    )
+    document_ids: list[str] = Field(
+        default_factory=list,
+        description="Document IDs from the file upload API.",
     )
     workflow: str = Field(
-        default="data_analysis",
-        description="Workflow name: 'data_analysis' or 'vision'.",
+        default="auto",
+        description="Workflow name or 'auto' for automatic routing.",
     )
+    session_id: Optional[str] = Field(None)
 
 
-class WorkflowStepResponse(BaseModel):
-    """Summary of a single agent execution step."""
-    agent: str
-    status: str
-    instruction: str = ""
-    summary: str = ""
-    duration_ms: float | None = None
-    error: str | None = None
-    warning: str | None = None
-    artifact_count: int | None = None
-
-
-class WorkflowResponse(BaseModel):
+class WorkflowRunResponse(BaseModel):
     """Response from a workflow execution."""
-    workflow_name: str = Field(..., description="Which workflow was executed.")
-    status: str = Field(..., description="Overall: completed, partial, or failed.")
-    steps: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Ordered execution steps with per-agent details.",
-    )
-    agent_results: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Full agent results keyed by agent name.",
-    )
-    artifacts: list[str] = Field(
-        default_factory=list,
-        description="All file paths created during the workflow.",
-    )
-    warnings: list[str] = Field(
-        default_factory=list,
-        description="Non-fatal issues from any agent.",
-    )
-    errors: list[str] = Field(
-        default_factory=list,
-        description="Errors from any agent.",
-    )
-    duration_ms: float = Field(
-        default=0,
-        description="Total workflow execution time in milliseconds.",
-    )
+    workflow_id: str = ""
+    workflow_name: str = ""
+    status: str = ""
+    steps: list[dict[str, Any]] = Field(default_factory=list)
+    agent_results: dict[str, Any] = Field(default_factory=dict)
+    artifacts: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    duration_ms: float = 0

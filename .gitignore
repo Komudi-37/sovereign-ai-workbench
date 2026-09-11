@@ -1,38 +1,25 @@
-# ===========================
-# Sovereign AI Workbench
-# .gitignore
-# ===========================
-
-# Environment variables (NEVER commit .env)
-.env
-
-# Python
-.venv/
-venv/
+# Dependencies
+node_modules/
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
-*.egg-info/
-dist/
-build/
-*.egg
 
-# Node.js / React
-node_modules/
-dist/
-build/
+# Virtual environments
+.venv/
+venv/
 
-# Generated files
-generated/
-cache/
+# Environment files (secrets)
+.env
+backend/.env
 
-# Logs
-*.log
+# Database
+*.db
+*.sqlite3
 
-# OS files
-.DS_Store
-Thumbs.db
+# Generated runtime data — NEVER commit confidential uploads or outputs
+data/
+backend/outputs/
+outputs/
 
 # IDE
 .vscode/
@@ -40,7 +27,15 @@ Thumbs.db
 *.swp
 *.swo
 
-# Local model files
-*.gguf
-*.bin
-*.safetensors
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Test outputs
+backend/tests/test_outputs/

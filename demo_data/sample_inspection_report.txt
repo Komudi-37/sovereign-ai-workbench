@@ -1,0 +1,146 @@
+EQUIPMENT INSPECTION REPORT
+===========================
+
+PUBLIC DEMONSTRATION DATA — NOT CONFIDENTIAL
+
+Report No: INS-2025-0042
+Date: January 18, 2025
+Inspector: Demonstration Data
+Location: Unit 3, Area A — Demo Refinery Complex
+Classification: INTERNAL — DEMONSTRATION DATA
+
+EXECUTIVE SUMMARY
+------------------
+This report documents the scheduled quarterly inspection of rotating equipment
+in Unit 3, Area A of the demonstration refinery complex. The inspection covered
+four major equipment items: Centrifugal Pump P-101, Heat Exchanger HX-201,
+Compressor C-301, and Cooling Tower CT-401.
+
+During the inspection period, two significant findings were identified:
+1. Bearing degradation on Centrifugal Pump P-101 (corrected)
+2. Fouling on Heat Exchanger HX-201 (corrected)
+
+Both issues were addressed through scheduled maintenance actions.
+
+EQUIPMENT INSPECTED
+-------------------
+
+1. Centrifugal Pump P-101
+   - Location: Unit 3, Area A
+   - Service: Process water circulation
+   - Design Temperature: 80°C
+   - Design Pressure: 10 bar
+   - Last Overhaul: March 2024
+
+2. Heat Exchanger HX-201
+   - Location: Unit 3, Area B
+   - Service: Process fluid cooling
+   - Type: Shell and Tube
+   - Design Temperature: 120°C / 60°C
+   - Design Pressure: 8 bar / 6 bar
+   - Last Cleaning: September 2024
+
+3. Compressor C-301
+   - Location: Unit 4, Area A
+   - Service: Process gas compression
+   - Design Pressure: 25 bar
+   - Last Overhaul: June 2024
+
+4. Cooling Tower CT-401
+   - Location: Utility Area
+   - Service: Circulating water cooling
+   - Capacity: 5000 m³/h
+   - Last Inspection: October 2024
+
+FINDINGS
+--------
+
+Finding 1: Centrifugal Pump P-101 — Bearing Degradation
+  Severity: Medium
+  Status: CORRECTED
+
+  During routine monitoring on January 15-16, 2025, increasing temperature
+  and vibration trends were observed on Pump P-101:
+  - Temperature increased from 45.2°C to 62.4°C over 32 hours
+  - Vibration increased from 2.1 mm/s to 4.5 mm/s
+  - Flow rate decreased from 120.5 m³/h to 102.0 m³/h
+
+  Root Cause: Drive-end bearing showed signs of wear and early-stage
+  spalling. Lubrication analysis confirmed metallic particle contamination.
+
+  Corrective Action: Bearing replaced on January 17, 2025. Post-maintenance
+  readings confirmed normal operation (46.0°C, 2.0 mm/s, 121.5 m³/h).
+
+  Recommendation: Reduce bearing inspection interval from 6 months to
+  3 months. Add online vibration monitoring if budget permits.
+
+
+Finding 2: Heat Exchanger HX-201 — Fouling
+  Severity: Low-Medium
+  Status: CORRECTED
+
+  On January 18, 2025, elevated shell-side temperature (88.5°C → 91.2°C)
+  and reduced flow rate (85.3 → 76.0 m³/h) indicated progressive fouling.
+
+  Root Cause: Biological and scale fouling on tube surfaces, consistent
+  with seasonal cooling water quality variations.
+
+  Corrective Action: Chemical cleaning performed on January 18, 2025.
+  Post-cleaning readings confirmed restored performance (82.0°C, 85.0 m³/h).
+
+  Recommendation: Schedule cleaning at 4-month intervals during
+  warm-weather months. Consider online fouling monitor installation.
+
+
+Finding 3: Compressor C-301 — Minor Vibration Increase
+  Severity: Low
+  Status: MONITORING
+
+  Brief vibration increase observed on January 16 (4.5-4.8 mm/s vs
+  baseline 3.5 mm/s). Normalized by January 17 without intervention.
+
+  Likely Cause: Temporary process upset (feed composition variation).
+
+  Recommendation: Continue routine monitoring. No maintenance required
+  at this time.
+
+
+COMPLIANCE ASSESSMENT
+---------------------
+All inspected equipment meets the requirements of:
+- SOP-MAINT-001: Rotating Equipment Maintenance Standard
+- SOP-INSP-003: Quarterly Equipment Inspection Procedure
+- API 610: Centrifugal Pumps (for P-101)
+- TEMA Standards (for HX-201)
+
+No regulatory non-conformances identified.
+
+
+RECOMMENDATIONS SUMMARY
+------------------------
+1. Reduce P-101 bearing inspection interval to 3 months
+2. Install online vibration monitoring on P-101
+3. Schedule HX-201 cleaning at 4-month intervals
+4. Install fouling monitor on HX-201
+5. Continue routine monitoring on C-301 and CT-401
+6. Update maintenance schedule in CMMS
+
+
+NEXT INSPECTION
+---------------
+Scheduled: April 2025
+Inspector: To be assigned
+Scope: Full quarterly inspection + follow-up on P-101 and HX-201
+
+
+APPROVAL
+--------
+Prepared by: Inspector (Demonstration)
+Reviewed by: Maintenance Supervisor (Demonstration)
+Approved by: Plant Manager (Demonstration)
+
+Date: January 18, 2025
+
+---
+This is PUBLIC DEMONSTRATION DATA for the Sovereign AI Workbench hackathon.
+It does not represent real equipment or real inspection results.

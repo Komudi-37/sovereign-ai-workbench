@@ -1,0 +1,138 @@
+STANDARD OPERATING PROCEDURE
+=============================
+
+PUBLIC DEMONSTRATION DATA — NOT CONFIDENTIAL
+
+Document No: SOP-MAINT-001
+Title: Rotating Equipment Maintenance Standard
+Revision: 3.0
+Effective Date: January 1, 2025
+Classification: INTERNAL — DEMONSTRATION DATA
+
+1. PURPOSE
+----------
+This standard defines the requirements for preventive and corrective
+maintenance of rotating equipment including pumps, compressors, turbines,
+and fans within the demonstration refinery complex.
+
+2. SCOPE
+--------
+This SOP applies to all rotating equipment with:
+- Motor rating > 5 kW
+- Operating pressure > 2 bar
+- Operating temperature > 50°C
+- Critical service designation
+
+3. RESPONSIBILITIES
+-------------------
+3.1 Maintenance Supervisor: Schedule and oversee maintenance activities
+3.2 Maintenance Technician: Execute maintenance tasks per this procedure
+3.3 Operations Supervisor: Coordinate equipment isolation and handover
+3.4 Inspection Engineer: Conduct condition assessments
+
+4. VIBRATION MONITORING STANDARDS
+----------------------------------
+4.1 Alert Levels (per ISO 10816):
+    - Normal: < 2.8 mm/s RMS
+    - Watch:  2.8 – 4.5 mm/s RMS
+    - Alert:  4.5 – 7.1 mm/s RMS
+    - Danger: > 7.1 mm/s RMS
+
+4.2 When vibration exceeds Alert level:
+    a) Notify Maintenance Supervisor within 4 hours
+    b) Increase monitoring frequency to daily
+    c) Schedule corrective action within 7 days
+    d) Document in Maintenance Management System
+
+4.3 When vibration exceeds Danger level:
+    a) Notify Maintenance Supervisor immediately
+    b) Notify Operations Supervisor for potential shutdown
+    c) Initiate emergency maintenance assessment
+    d) Equipment must not continue operation if safety risk exists
+
+5. TEMPERATURE MONITORING STANDARDS
+------------------------------------
+5.1 Bearing Temperature Limits:
+    - Normal: < 65°C above ambient
+    - Watch:  65–80°C above ambient
+    - Alert:  80–95°C above ambient
+    - Trip:   > 95°C above ambient
+
+5.2 When bearing temperature exceeds Alert level:
+    a) Verify lubricant condition and level
+    b) Check cooling system operation
+    c) Increase monitoring frequency
+    d) Schedule inspection within 48 hours
+
+6. BEARING MAINTENANCE
+----------------------
+6.1 Routine Inspection Interval:
+    - Critical service: Every 3 months
+    - Normal service:   Every 6 months
+    - Low criticality:  Every 12 months
+
+6.2 Bearing Replacement Criteria:
+    a) Vibration consistently above Alert level
+    b) Temperature consistently above Watch level
+    c) Lubricant analysis shows metallic contamination > 50 ppm
+    d) Visual inspection reveals spalling, pitting, or wear
+    e) Bearing has exceeded manufacturer's recommended life
+
+6.3 Post-Replacement Verification:
+    a) Alignment check (laser preferred)
+    b) Vibration baseline measurement
+    c) Temperature measurement at 1, 4, and 24 hours
+    d) Flow/pressure verification against design values
+
+7. HEAT EXCHANGER MAINTENANCE
+------------------------------
+7.1 Performance Monitoring:
+    - Track approach temperature monthly
+    - Track pressure drop monthly
+    - Track flow rate weekly
+
+7.2 Fouling Assessment Criteria:
+    a) Approach temperature increase > 5°C from clean baseline
+    b) Pressure drop increase > 20% from clean baseline
+    c) Flow rate decrease > 10% from design flow
+
+7.3 Cleaning Interval:
+    - Cooling water service:  Every 6 months (4 months in warm season)
+    - Process service:        Per fouling assessment
+    - Critical service:       Per condition monitoring
+
+7.4 Cleaning Methods:
+    a) Chemical cleaning: Preferred for biological/scale fouling
+    b) Mechanical cleaning: For heavy deposits
+    c) Hydrojetting: For stubborn deposits
+
+8. DOCUMENTATION REQUIREMENTS
+------------------------------
+8.1 All maintenance activities must be documented in the CMMS
+8.2 Required documentation:
+    a) Work order number
+    b) Equipment tag
+    c) Description of work performed
+    d) Parts used
+    e) Pre- and post-maintenance measurements
+    f) Inspector sign-off
+
+9. ACCEPTANCE CRITERIA
+----------------------
+9.1 Equipment is accepted for return to service when:
+    a) All measurements within Normal range
+    b) No visible defects or leaks
+    c) Safety devices verified functional
+    d) Operations notified and agreed to accept
+    e) Documentation complete in CMMS
+
+10. REFERENCES
+--------------
+- API 610: Centrifugal Pumps for Petroleum Applications
+- API 617: Axial and Centrifugal Compressors
+- ISO 10816: Mechanical Vibration
+- TEMA: Standards of Tubular Exchanger Manufacturers Association
+- SOP-INSP-003: Quarterly Equipment Inspection Procedure
+
+---
+This is PUBLIC DEMONSTRATION DATA for the Sovereign AI Workbench hackathon.

@@ -1,0 +1,49 @@
+timestamp,equipment_id,equipment_name,location,temperature_c,pressure_bar,vibration_mm_s,flow_rate_m3h,status,notes
+2025-01-15 08:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,45.2,3.8,2.1,120.5,Normal,Routine reading
+2025-01-15 08:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,78.4,5.2,0.8,85.3,Normal,Routine reading
+2025-01-15 08:00,EQ-003,Compressor C-301,Unit 4 - Area A,62.1,12.5,3.5,200.0,Normal,Routine reading
+2025-01-15 08:00,EQ-004,Cooling Tower CT-401,Utility Area,32.0,1.2,1.0,500.0,Normal,Routine reading
+2025-01-15 12:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,47.8,3.9,2.3,118.2,Normal,Slight temp increase
+2025-01-15 12:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,82.1,5.3,0.9,84.1,Normal,Routine reading
+2025-01-15 12:00,EQ-003,Compressor C-301,Unit 4 - Area A,64.5,12.8,3.8,198.5,Normal,Routine reading
+2025-01-15 12:00,EQ-004,Cooling Tower CT-401,Utility Area,33.5,1.2,1.1,495.0,Normal,Routine reading
+2025-01-15 16:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,52.3,4.1,2.8,115.0,Watch,Temperature trending up
+2025-01-15 16:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,85.6,5.4,1.0,82.0,Normal,Routine reading
+2025-01-15 16:00,EQ-003,Compressor C-301,Unit 4 - Area A,65.8,13.0,4.2,197.0,Normal,Routine reading
+2025-01-15 16:00,EQ-004,Cooling Tower CT-401,Utility Area,34.2,1.3,1.0,490.0,Normal,Routine reading
+2025-01-16 08:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,55.1,4.3,3.2,112.0,Watch,Temperature still rising
+2025-01-16 08:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,80.2,5.1,0.8,86.0,Normal,Routine reading
+2025-01-16 08:00,EQ-003,Compressor C-301,Unit 4 - Area A,63.0,12.6,3.6,199.0,Normal,Routine reading
+2025-01-16 08:00,EQ-004,Cooling Tower CT-401,Utility Area,31.8,1.2,1.0,505.0,Normal,Routine reading
+2025-01-16 12:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,58.7,4.5,3.8,108.0,Warning,High temperature - bearing issue suspected
+2025-01-16 12:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,83.5,5.3,0.9,83.5,Normal,Routine reading
+2025-01-16 12:00,EQ-003,Compressor C-301,Unit 4 - Area A,66.2,13.1,4.5,196.0,Watch,Vibration slightly elevated
+2025-01-16 12:00,EQ-004,Cooling Tower CT-401,Utility Area,33.0,1.2,1.0,498.0,Normal,Routine reading
+2025-01-16 16:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,62.4,4.8,4.5,102.0,Warning,Maintenance scheduled
+2025-01-16 16:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,86.0,5.5,1.1,81.0,Normal,Routine reading
+2025-01-16 16:00,EQ-003,Compressor C-301,Unit 4 - Area A,67.5,13.3,4.8,194.0,Watch,Monitoring vibration
+2025-01-16 16:00,EQ-004,Cooling Tower CT-401,Utility Area,34.8,1.3,1.1,488.0,Normal,Routine reading
+2025-01-17 08:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,48.0,3.8,2.0,122.0,Normal,Bearing replaced - back to normal
+2025-01-17 08:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,79.0,5.1,0.8,86.5,Normal,Routine reading
+2025-01-17 08:00,EQ-003,Compressor C-301,Unit 4 - Area A,62.5,12.5,3.5,200.0,Normal,Vibration normalized
+2025-01-17 08:00,EQ-004,Cooling Tower CT-401,Utility Area,31.5,1.2,1.0,502.0,Normal,Routine reading
+2025-01-17 12:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,46.5,3.8,2.0,121.0,Normal,Post-maintenance check OK
+2025-01-17 12:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,81.0,5.2,0.9,85.0,Normal,Routine reading
+2025-01-17 12:00,EQ-003,Compressor C-301,Unit 4 - Area A,63.0,12.6,3.5,199.5,Normal,Routine reading
+2025-01-17 12:00,EQ-004,Cooling Tower CT-401,Utility Area,32.8,1.2,1.0,500.0,Normal,Routine reading
+2025-01-17 16:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,47.0,3.9,2.1,120.0,Normal,Stable post-maintenance
+2025-01-17 16:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,84.0,5.4,1.0,83.0,Normal,Routine reading
+2025-01-17 16:00,EQ-003,Compressor C-301,Unit 4 - Area A,64.0,12.7,3.6,198.0,Normal,Routine reading
+2025-01-17 16:00,EQ-004,Cooling Tower CT-401,Utility Area,35.0,1.3,1.1,485.0,Normal,Routine reading
+2025-01-18 08:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,46.0,3.8,2.0,121.5,Normal,Routine reading
+2025-01-18 08:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,88.5,5.6,1.2,79.0,Watch,Temperature elevated - fouling suspected
+2025-01-18 08:00,EQ-003,Compressor C-301,Unit 4 - Area A,63.5,12.6,3.5,199.0,Normal,Routine reading
+2025-01-18 08:00,EQ-004,Cooling Tower CT-401,Utility Area,31.0,1.2,1.0,508.0,Normal,Routine reading
+2025-01-18 12:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,46.5,3.8,2.1,121.0,Normal,Routine reading
+2025-01-18 12:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,91.2,5.8,1.3,76.0,Warning,Fouling confirmed - cleaning scheduled
+2025-01-18 12:00,EQ-003,Compressor C-301,Unit 4 - Area A,64.0,12.7,3.6,198.5,Normal,Routine reading
+2025-01-18 12:00,EQ-004,Cooling Tower CT-401,Utility Area,33.0,1.2,1.0,498.0,Normal,Routine reading
+2025-01-18 16:00,EQ-001,Centrifugal Pump P-101,Unit 3 - Area A,47.0,3.9,2.1,120.0,Normal,Routine reading
+2025-01-18 16:00,EQ-002,Heat Exchanger HX-201,Unit 3 - Area B,82.0,5.2,0.8,85.0,Normal,Cleaned - performance restored
+2025-01-18 16:00,EQ-003,Compressor C-301,Unit 4 - Area A,64.5,12.8,3.7,197.5,Normal,Routine reading
+2025-01-18 16:00,EQ-004,Cooling Tower CT-401,Utility Area,34.5,1.3,1.1,490.0,Normal,Routine reading

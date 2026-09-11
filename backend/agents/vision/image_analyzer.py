@@ -428,6 +428,17 @@ def vision_adapter(context):
     Adapter for the existing orchestrator's AgentContext / AgentResult.
     """
     from agents.orchestrator.state import AgentResult
+    from agents.vision.local_vision_model import LocalVisionModel
+
+    try:
+        local_model = LocalVisionModel()
+    except Exception as e:
+        return AgentResult(
+            agent_name="vision",
+            status="failed",
+            summary=f"Vision model unavailable: {e}",
+            errors=[str(e)]
+        )
 
     files = [
         filename
@@ -437,8 +448,11 @@ def vision_adapter(context):
     ]
 
     if not files:
-        raise ValueError(
-            "The Vision Agent requires an attached image or PDF."
+        return AgentResult(
+            agent_name="vision",
+            status="failed",
+            summary="The Vision Agent requires an attached image or PDF.",
+            errors=["No supported files attached."]
         )
 
     reference_parts = []
@@ -448,8 +462,6 @@ def vision_adapter(context):
         if remaining_characters <= 0:
             break
 
-        # Bounded reference information; no automatic loading of
-        # paths mentioned in upstream text.
         text = json.dumps(
             {
                 "task_id": task_id,
@@ -463,32 +475,40 @@ def vision_adapter(context):
         reference_parts.append(excerpt)
         remaining_characters -= len(excerpt)
 
-    model = VisionModel(
-        VisionModelConfig(
-            model=os.getenv(
-                "VISION_MODEL",
-                "gpt-4.1-mini",
+    analyzer = ImageAnalyzer(model=local_model)
+
+    request_text = (
+        f"User request: {context.user_request}\n\n"
+        f"Assigned vision task: {context.task.instruction}"
+    )
+    reference_context = "\n\n".join(reference_parts)
+
+    results = []
+    for filename in files:
+        path = analyzer._validate_path(filename)
+        document_hash = analyzer._file_hash(path)
+        
+        remaining = analyzer.config.max_visuals - len(results)
+        if remaining <= 0:
+            break
+            
+        if path.suffix.lower() == ".pdf":
+            visuals = analyzer._prepare_pdf(path, document_hash, None, remaining)
+        else:
+            visuals = analyzer._prepare_raster(path, document_hash, remaining)
+            
+        for visual in visuals:
+            result_dict = local_model.analyze(
+                image_bytes=visual.image_bytes,
+                source=visual.source,
+                request=request_text,
+                reference_context=reference_context
             )
-        )
-    )
-
-    analyzer = ImageAnalyzer(model=model)
-
-    batch = analyzer.analyze_files(
-        files=files,
-        request=(
-            f"User request: {context.user_request}\n\n"
-            f"Assigned vision task: {context.task.instruction}"
-        ),
-        reference_context="\n\n".join(reference_parts),
-    )
+            results.append(result_dict)
 
     return AgentResult(
-        summary=(
-            f"Analyzed {len(batch.results)} visual page(s)/frame(s). "
-            "Returned source-linked findings and uncertainties."
-        ),
-        data=batch.model_dump(mode="json"),
+        summary=f"Analyzed {len(results)} visual page(s)/frame(s) locally.",
+        data={"results": results}
     )
 
 

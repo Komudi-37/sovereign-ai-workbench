@@ -1,277 +1,245 @@
-# Sovereign AI Workbench
+# Sovereign On-Premise Agentic AI Workbench
 
-**Milestone 1** — Local AI Chat Interface
-
-A self-hosted AI workbench for confidential/industrial environments. All inference runs locally through [Ollama](https://ollama.com/) — no data ever leaves your machine.
-
-> ⚠️ This is **Milestone 1** — a foundational chat interface. The complete air-gapped production system (RAG, OCR, agents, document generation, etc.) is planned for future milestones.
+A sovereign, air-gapped agentic AI workbench built for confidential industrial environments (such as refineries, PSUs, and defense-linked organizations). All inference runs strictly on-premise using open-weight multimodal models via [Ollama](https://ollama.com/) — **no confidential data ever leaves your internal infrastructure**.
 
 ---
 
-## Architecture
+## Architecture Overview
 
 ```
-Browser
-  ↓
-React frontend (Vite, port 5173)
-  ↓ HTTP
-FastAPI backend (port 8000)
-  ↓
-LLMService → OllamaProvider
-  ↓ HTTP
-Ollama (port 11434)
-  ↓
-qwen3:4b
-```
+                          ┌───────────────────────────┐
+                          │   React Frontend (Vite)   │
+                          │   (Port 5173, Dark UI)    │
+                          └─────────────┬─────────────┘
+                                        │ HTTP
+                                        ▼
+                          ┌───────────────────────────┐
+                          │      FastAPI Backend      │
+                          │        (Port 8000)        │
+                          └─────────────┬─────────────┘
+                                        │
+                                        ▼
+                          ┌───────────────────────────┐
+                          │    ORCHESTRATOR AGENT     │
+                          │  (State Graph & Routing)  │
+                          └─────────────┬─────────────┘
+                                        │
+           ┌────────────────────────────┼────────────────────────────┐
+           │                            │                            │
+           ▼                            ▼                            ▼
+  ┌─────────────────┐          ┌─────────────────┐          ┌─────────────────┐
+  │    OCR Agent    │          │    RAG Agent    │          │  Vision Agent   │
+  │ (PyMuPDF/Local) │          │  (FAISS/Local)  │          │ (Local Ollama)  │
+  └────────┬────────┘          └────────┬────────┘          └────────┬────────┘
+           │                            │                            │
+           └────────────────────────────┼────────────────────────────┘
+                                        │
+                         ┌──────────────┴──────────────┐
+                         ▼                             ▼
+                ┌──────────────────┐          ┌──────────────────┐
+                │  Data Analysis   │          │ Report Generator │
+                │  (Pandas/Charts) │          │ (DOCX/PDF/PPTX)  │
+                └────────┬─────────┘          └────────┬─────────┘
+                         │                             │
+                         └──────────────┬──────────────┘
+                                        ▼
+                                 ┌──────────────┐
+                                 │  Artifacts   │
+                                 │ (DOCX, PNG)  │
+                                 └──────────────┘
 
-- The **frontend** never communicates directly with Ollama.
-- The **LLM integration layer** abstracts the provider, making it easy to add new local models later.
-- **No cloud AI services** are used — all inference is local.
+Supporting Subsystems:
+- SQLite Database (SQLAlchemy ORM, persistent)
+- Model Router Service (Task-based local model selection)
+- Audit Trail Subsystem (All actions logged with timestamps)
+- Vector Store (Local FAISS on disk)
+```
 
 ---
 
-## Prerequisites
+## Six Cooperating Agents
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| **Python** | 3.11+ | For the FastAPI backend |
-| **Node.js** | 18+ | For the React frontend |
-| **Ollama** | Latest | Local LLM inference server |
+1. **Orchestrator Agent** (`backend/agents/orchestrator/`)
+   - Central workflow engine executing topological sort over dependencies.
+   - Handles auto-routing based on intent and attached file types.
+   - Passes structured `AgentContext` and `AgentResult` downstream.
 
-### Hardware
+2. **OCR Agent** (`backend/agents/ocr/`)
+   - Local document extraction supporting PDF, PNG, JPG, and scanned files.
+   - PyMuPDF native extraction with fallback to local pytesseract.
+   - Returns structured pages, text, and confidence scores.
 
-- **RAM**: 16 GB recommended (qwen3:4b uses ~4-6 GB)
-- **GPU**: Optional — works on CPU (Intel Iris Xe or similar is fine)
-- **Disk**: ~3 GB for the qwen3:4b model
+3. **RAG Agent** (`backend/agents/rag/`)
+   - Text chunking (500–800 tokens, 15% overlap) preserving paragraph boundaries.
+   - Local embeddings via Ollama (`nomic-embed-text`).
+   - Persistent FAISS vector store on disk; returns ranked results with citations `[Source: document.pdf, page X]`.
+
+4. **Vision Agent** (`backend/agents/vision/`)
+   - Local vision understanding via Ollama multimodal models (`llava:7b` / `qwen2.5-vl`).
+   - ZERO cloud/OpenAI dependencies — returns structured observations, visible labels, and findings.
+   - Graceful failure when local vision model is not installed.
+
+5. **Data Analysis Agent** (`backend/agents/data_analysis/`)
+   - Local tabular data processing (CSV, Excel) using Pandas, NumPy, Matplotlib.
+   - Descriptive statistics, trend analysis, anomaly detection, chart artifact generation.
+
+6. **Report Generation Agent** (`backend/agents/report/`)
+   - Generates professional deliverables (DOCX, PDF, PPTX, XLSX) via python-docx and reportlab.
+   - Consumes upstream agent findings, embeds generated charts, tables, and watermarks (`INTERNAL — DEMONSTRATION DATA`).
 
 ---
 
-## Setup
+## Supporting Services (Subsystems)
 
-### 1. Install Ollama
+- **Model Router Service** (`app/services/model_router.py`): Routes tasks (`chat`, `reasoning`, `vision`, `retrieval`) to configured local models.
+- **Audit Logging Subsystem** (`app/services/audit.py`): Captures immutable audit entries for uploads, OCR, RAG searches, workflows, and chat.
+- **Persistent Database** (`app/db/`): SQLite via SQLAlchemy storing users, sessions, messages, documents, document chunks, workflow runs, agent runs, and artifacts. Configurable to PostgreSQL.
+- **Local File & Artifact Storage** (`data/`, `backend/outputs/`): Deduplicated document uploads via SHA-256 with secure file download endpoints.
 
-Download from [https://ollama.com/download](https://ollama.com/download) and install.
+---
 
-### 2. Pull the Qwen3 4B model
+## Sovereignty & Air-Gap Compliance
 
-```bash
-ollama pull qwen3:4b
-```
+| Requirement | Implementation | Proof / Verification |
+|---|---|---|
+| **Zero Cloud APIs** | No OpenAI, Anthropic, Gemini SDKs or network calls | Verified via codebase grep & `GET /api/security/status` |
+| **No Cloud Fallback** | Missing local models fail gracefully with clear error messages | Tested in Vision & RAG |
+| **No External CDNs** | System font stack only (`-apple-system, BlinkMacSystemFont, Segoe UI`) | All Google Fonts links removed from `index.html` |
+| **Local LLM Inference** | Ollama running `qwen3:4b` on localhost | Hardened HTTP client with 180s timeout & token bounds |
+| **Local Embeddings** | Ollama `nomic-embed-text` | Air-gapped embeddings generated via local HTTP API |
+| **Local Vector Search** | FAISS CPU index saved directly to `./data/vector/` | No cloud vector DB needed |
 
-### 3. Start Ollama
+---
 
-Ollama usually runs automatically after installation. To start manually:
+## Prerequisites & Installation
 
-```bash
-ollama serve
-```
+### 1. Hardware Requirements
+- **OS**: Windows, Linux, or macOS
+- **RAM**: 16 GB recommended (qwen3:4b uses ~4–6 GB)
+- **GPU**: Optional — runs entirely on CPU (Intel Iris Xe or standard x86 CPU)
+- **Software**: Python 3.11+, Node.js 18+, Ollama
 
-Verify it's running:
+### 2. Install & Configure Ollama
+1. Download Ollama from [https://ollama.com/download](https://ollama.com/download)
+2. Pull the required models:
+   ```bash
+   ollama pull qwen3:4b
+   # Optional models for Vision and RAG embeddings:
+   ollama pull nomic-embed-text
+   ollama pull llava:7b
+   ```
+3. Verify Ollama is running:
+   ```bash
+   curl http://localhost:11434
+   ```
 
-```bash
-curl http://localhost:11434
-```
-
-You should see: `Ollama is running`
-
-### 4. Set up the backend
-
+### 3. Backend Setup
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv .venv
-
-# Activate it
 # Windows:
 .venv\Scripts\activate
-# macOS/Linux:
+# Linux/macOS:
 # source .venv/bin/activate
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Create .env from template (adjust if needed)
-copy ..\.env.example .env
 ```
 
-### 5. Start the backend
-
-```bash
-cd backend
-.venv\Scripts\activate
-uvicorn app.main:app --reload --port 8000
-```
-
-### 6. Set up and start the frontend
-
+### 4. Frontend Setup
 ```bash
 cd frontend
 npm install
+```
+
+---
+
+## Running the Workbench
+
+### Start the Backend
+```bash
+cd backend
+.venv\Scripts\activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Start the Frontend
+```bash
+cd frontend
 npm run dev
 ```
-
-### 7. Open the app
-
-Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
+Open [http://localhost:5173](http://localhost:5173) in your web browser.
 
 ---
 
-## Environment Configuration
+## Demo Workflows
 
-Copy `.env.example` to `backend/.env`:
+### Hero Demo: Inspection Document → OCR → RAG → Approval Note
+1. Navigate to the **Chat** or **Workflows** page.
+2. Upload `demo_data/sample_inspection_report.txt`.
+3. Enter prompt:
+   > *"Read this inspection report, identify key findings, compare with our internal SOP, and prepare an approval note."*
+4. The Orchestrator automatically routes to `ocr_rag_report`:
+   - **OCR Agent** extracts text from the document.
+   - **RAG Agent** chunks and indexes the content.
+   - **Report Agent** compiles executive summary, findings, and outputs `report.docx`.
+5. Download the generated deliverable directly from the UI.
 
-```env
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3:4b
-FRONTEND_ORIGIN=http://localhost:5173
-```
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OLLAMA_BASE_URL` | Ollama server URL | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Model to use for chat | `qwen3:4b` |
-| `FRONTEND_ORIGIN` | Allowed CORS origin | `http://localhost:5173` |
+### Secondary Demo: Equipment Sensor Data Analysis
+1. Upload `demo_data/equipment_readings.csv`.
+2. Enter prompt:
+   > *"Analyze this equipment dataset, detect anomalies, generate charts, and prepare a management report."*
+3. The Orchestrator executes `data_analysis`:
+   - **Data Analysis Agent** computes statistics, detects pump bearing degradation & heat exchanger fouling, and renders Matplotlib charts.
+   - **Report Agent** compiles findings and charts into `report.docx`.
 
 ---
 
-## API Endpoints
+## API Reference
 
-### `GET /api/health`
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/health` | GET | Comprehensive system health check (Backend, DB, Ollama, Vector Store) |
+| `/api/security/status` | GET | Sovereignty status report (Cloud API keys detection, Local providers) |
+| `/api/chat` | POST | Persistent chat conversation with session tracking |
+| `/api/files/upload` | POST | Multipart file upload with SHA-256 deduplication |
+| `/api/files` | GET | List all uploaded documents |
+| `/api/files/{id}` | GET | Get document details and chunk metadata |
+| `/api/documents/{id}/index`| POST | Trigger OCR + RAG chunking + vector indexing |
+| `/api/rag/search` | POST | Retrieve document snippets with citations |
+| `/api/workflows/run` | POST | Run agent workflow (`auto`, `data_analysis`, `ocr_rag_report`, `vision`) |
+| `/api/workflows` | GET | List workflow execution history |
+| `/api/artifacts` | GET | List all generated deliverables (DOCX, PNG, CSV) |
+| `/api/artifacts/{id}/download` | GET | Download generated deliverable file |
+| `/api/audit` | GET | Retrieve auditable action logs |
 
-Health check — verifies the backend and Ollama connectivity.
+---
 
+## Verification & Automated Testing
+
+Run the automated pytest suite:
 ```bash
-curl http://localhost:8000/api/health
+cd backend
+.venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
-Response:
-
-```json
-{
-  "status": "ok",
-  "backend": "ok",
-  "ollama": "ok"
-}
-```
-
-### `POST /api/chat`
-
-Send a message to the AI model.
-
-```bash
-curl -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d "{\"message\": \"What is a refinery?\"}"
-```
-
-Response:
-
-```json
-{
-  "response": "A refinery is...",
-  "model": "qwen3:4b"
-}
-```
+All 21 unit tests verify database persistence, file uploads, OCR extraction, RAG chunking, FAISS vector indexing, Vision local routing, and API endpoints.
 
 ---
 
-## Project Structure
+## Prototype vs. Production Upgrade Path
 
-```
-sovereign-ai-workbench/
-├── backend/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py          ← FastAPI routes, CORS, lifespan
-│   │   ├── config.py        ← Environment configuration
-│   │   ├── models.py        ← Pydantic request/response schemas
-│   │   └── services/
-│   │       ├── __init__.py
-│   │       └── llm.py       ← LLMService, LLMProvider, OllamaProvider
-│   ├── requirements.txt
-│   └── .env                  ← Local config (gitignored)
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx           ← Chat UI component
-│   │   ├── App.css           ← Chat styles
-│   │   ├── api.js            ← Backend API helper
-│   │   ├── index.css         ← Global styles
-│   │   └── main.jsx          ← React entry point
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-├── .env.example              ← Config template (safe to commit)
-├── .gitignore
-└── README.md
-```
+| Component | Hackathon Prototype (Current) | Production Upgrade Path |
+|---|---|---|
+| **Database** | SQLite with auto-migration | PostgreSQL with connection pooling |
+| **Vector Store** | Local FAISS files on disk | Qdrant / pgvector cluster |
+| **Model Serving** | Single Ollama instance on localhost | vLLM / Ollama multi-GPU cluster |
+| **Execution Sandbox**| Local Python process | Docker / gVisor isolated sandbox |
+| **Authentication** | Built-in admin session | Enterprise SAML / OIDC / LDAP SSO |
+| **Storage** | Local `./data/` directories | S3-compatible air-gapped MinIO bucket |
 
 ---
 
-## Troubleshooting
+## License & Data Notice
 
-### "Cannot connect to the backend server"
-
-- Is FastAPI running? Start it with: `uvicorn app.main:app --reload --port 8000`
-- Check the terminal for Python errors.
-
-### "Cannot connect to Ollama"
-
-- Is Ollama running? Start it with: `ollama serve`
-- Check: `curl http://localhost:11434` should return "Ollama is running"
-
-### "Model not found"
-
-- Pull the model: `ollama pull qwen3:4b`
-- Verify: `ollama list` should show qwen3:4b
-
-### "Request timed out"
-
-- qwen3:4b on CPU can take 20-60 seconds per response. This is normal.
-- Ensure you have enough free RAM (~6 GB for the model).
-
-### CORS errors in browser console
-
-- Verify `FRONTEND_ORIGIN` in `backend/.env` matches your frontend URL.
-- Default: `http://localhost:5173`
-
----
-
-## Current Limitations (Milestone 1)
-
-- Single-turn chat only (no conversation memory / context window)
-- No streaming responses (waits for full response)
-- No file uploads or document processing
-- No authentication or user management
-- No model selection UI
-- No conversation persistence (refreshing clears history)
-
----
-
-## Future Architecture (Planned)
-
-```
-Frontend
-  ↓
-FastAPI
-  ↓
-LangGraph Orchestrator
-  ↓
-Model Router
-  ↓
-Multiple Local LLM Providers
-  ↓
-RAG (Qdrant) · OCR · Vision · Coding Agent
-  ↓
-Docker Sandbox · Verification · Document Generation
-  ↓
-Security / Audit Layer
-```
-
-These features will be implemented in future milestones.
-
----
-
-## License
-
-Private / Internal Use
+**INTERNAL / PROTOTYPE USE ONLY.**  
+All files in `demo_data/` are synthetic demonstration data and contain no confidential or proprietary information.

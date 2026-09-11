@@ -2,25 +2,15 @@
 Orchestrator for Sovereign AI Workbench.
 
 Receives a user task, determines which agents to run (from a workflow
-definition), executes them in dependency order, and collects results.
-
-Architecture:
-    User request + files + workflow name
-        → Orchestrator.run()
-            → topological sort of AgentTasks
-            → for each task:
-                  build AgentContext (with upstream AgentResults)
-                  call adapter(context)
-                  collect AgentResult
-            → return WorkflowResult
-
-All processing is local. No cloud APIs are called by the orchestrator
-itself. Individual agents may use the local LLM via Ollama.
+definition or automatic routing), executes them in dependency order,
+and collects results. All processing is local.
 """
 
 import logging
+import os
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 from agents.orchestrator.state import AgentContext, AgentResult, AgentTask
 from agents.orchestrator.registry import get_agent
@@ -59,31 +49,154 @@ VISION_WORKFLOW = [
     ),
 ]
 
+OCR_WORKFLOW = [
+    AgentTask(
+        agent_name="ocr",
+        instruction="Extract text from the attached document using local OCR.",
+        depends_on=[],
+    ),
+]
+
+OCR_RAG_REPORT_WORKFLOW = [
+    AgentTask(
+        agent_name="ocr",
+        instruction="Extract text from the attached document.",
+        depends_on=[],
+    ),
+    AgentTask(
+        agent_name="rag",
+        instruction="Index the extracted text and search for relevant context.",
+        depends_on=["ocr"],
+    ),
+    AgentTask(
+        agent_name="report",
+        instruction="Generate a professional report from OCR and RAG results.",
+        depends_on=["ocr", "rag"],
+    ),
+]
+
+FULL_INSPECTION_WORKFLOW = [
+    AgentTask(
+        agent_name="ocr",
+        instruction="Extract text from the inspection document.",
+        depends_on=[],
+    ),
+    AgentTask(
+        agent_name="rag",
+        instruction="Search the knowledge base for relevant SOPs and standards.",
+        depends_on=["ocr"],
+    ),
+    AgentTask(
+        agent_name="report",
+        instruction="Generate an approval note based on inspection findings "
+                    "and relevant SOPs/standards.",
+        depends_on=["ocr", "rag"],
+    ),
+]
+
+VISION_REPORT_WORKFLOW = [
+    AgentTask(
+        agent_name="vision",
+        instruction="Analyze the attached images for equipment, labels, anomalies.",
+        depends_on=[],
+    ),
+    AgentTask(
+        agent_name="report",
+        instruction="Generate a report from the visual analysis findings.",
+        depends_on=["vision"],
+    ),
+]
+
 # Map of workflow names to their task lists
 WORKFLOWS: dict[str, list[AgentTask]] = {
     "data_analysis": DATA_ANALYSIS_WORKFLOW,
     "vision": VISION_WORKFLOW,
+    "vision_report": VISION_REPORT_WORKFLOW,
+    "ocr": OCR_WORKFLOW,
+    "ocr_rag_report": OCR_RAG_REPORT_WORKFLOW,
+    "full_inspection": FULL_INSPECTION_WORKFLOW,
 }
 
 
 # ---------------------------------------------------------------------------
-# WorkflowResult — structured output from a complete workflow run
+# Automatic workflow routing
+# ---------------------------------------------------------------------------
+
+# File extension categories
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
+DATA_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json"}
+DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".txt", ".pptx"}
+
+
+def auto_route(user_request: str, files: list[str]) -> str:
+    """
+    Automatically select the best workflow based on user request and file types.
+
+    Uses keyword + file-type heuristics for the prototype.
+    """
+    request_lower = user_request.lower()
+
+    # Determine file types present
+    file_exts = {Path(f).suffix.lower() for f in files if f}
+    has_images = bool(file_exts & IMAGE_EXTENSIONS)
+    has_data = bool(file_exts & DATA_EXTENSIONS)
+    has_documents = bool(file_exts & DOCUMENT_EXTENSIONS)
+
+    # Keyword-based routing
+    data_keywords = ["analyze", "analysis", "csv", "data", "chart", "trend",
+                     "statistic", "anomal", "reading", "equipment data", "excel"]
+    vision_keywords = ["image", "photo", "picture", "visual", "inspect",
+                       "equipment photo", "p&id", "diagram", "camera"]
+    ocr_keywords = ["read", "extract", "ocr", "scan", "text from"]
+    rag_keywords = ["compare", "sop", "standard", "knowledge", "internal",
+                    "approval", "compliance", "regulation", "manual"]
+    report_keywords = ["report", "approval note", "generate", "document",
+                       "prepare", "create", "summarize", "summary"]
+
+    has_data_intent = any(k in request_lower for k in data_keywords)
+    has_vision_intent = any(k in request_lower for k in vision_keywords)
+    has_ocr_intent = any(k in request_lower for k in ocr_keywords)
+    has_rag_intent = any(k in request_lower for k in rag_keywords)
+    has_report_intent = any(k in request_lower for k in report_keywords)
+
+    # Decision logic
+    if has_data and (has_data_intent or not has_documents):
+        return "data_analysis"
+
+    if has_images and has_vision_intent:
+        if has_report_intent:
+            return "vision_report"
+        return "vision"
+
+    if has_documents and has_rag_intent and has_report_intent:
+        return "full_inspection"
+
+    if has_documents and has_ocr_intent:
+        if has_rag_intent or has_report_intent:
+            return "ocr_rag_report"
+        return "ocr"
+
+    if has_documents:
+        if has_report_intent or has_rag_intent:
+            return "ocr_rag_report"
+        return "ocr"
+
+    if has_images:
+        return "vision"
+
+    # Default: OCR + RAG + Report for documents, or data_analysis for data
+    if has_data:
+        return "data_analysis"
+
+    return "ocr_rag_report"
+
+
+# ---------------------------------------------------------------------------
+# WorkflowResult
 # ---------------------------------------------------------------------------
 
 class WorkflowResult:
-    """
-    Collects the outcome of an entire workflow execution.
-
-    Attributes:
-        workflow_name: Which workflow was executed.
-        status:        "completed", "partial", or "failed".
-        steps:         Ordered list of execution step summaries.
-        results:       Agent results keyed by agent_name.
-        artifacts:     Aggregated file paths from all agents.
-        warnings:      Aggregated warnings from all agents.
-        errors:        Aggregated errors from all agents.
-        duration_ms:   Total execution time in milliseconds.
-    """
+    """Collects the outcome of an entire workflow execution."""
 
     def __init__(self, workflow_name: str):
         self.workflow_name = workflow_name
@@ -96,7 +209,6 @@ class WorkflowResult:
         self.duration_ms: float = 0
 
     def to_dict(self) -> dict:
-        """Serialize to a plain dict for the API response."""
         return {
             "workflow_name": self.workflow_name,
             "status": self.status,
@@ -113,20 +225,14 @@ class WorkflowResult:
 
 
 # ---------------------------------------------------------------------------
-# Topological sort — respects depends_on ordering
+# Topological sort
 # ---------------------------------------------------------------------------
 
 def _topological_sort(tasks: list[AgentTask]) -> list[AgentTask]:
-    """
-    Sort tasks so that dependencies come before dependents.
-
-    Raises:
-        ValueError: If there are missing or circular dependencies.
-    """
+    """Sort tasks so that dependencies come before dependents."""
     task_map = {task.agent_name: task for task in tasks}
     all_names = set(task_map.keys())
 
-    # Check for unknown dependencies
     for task in tasks:
         unknown = set(task.depends_on) - all_names
         if unknown:
@@ -145,7 +251,6 @@ def _topological_sort(tasks: list[AgentTask]) -> list[AgentTask]:
     sorted_names: list[str] = []
 
     while queue:
-        # Process in a stable order
         queue.sort()
         current = queue.pop(0)
         sorted_names.append(current)
@@ -158,9 +263,7 @@ def _topological_sort(tasks: list[AgentTask]) -> list[AgentTask]:
 
     if len(sorted_names) != len(all_names):
         remaining = all_names - set(sorted_names)
-        raise ValueError(
-            f"Circular dependency detected among: {sorted(remaining)}"
-        )
+        raise ValueError(f"Circular dependency detected among: {sorted(remaining)}")
 
     return [task_map[name] for name in sorted_names]
 
@@ -170,40 +273,23 @@ def _topological_sort(tasks: list[AgentTask]) -> list[AgentTask]:
 # ---------------------------------------------------------------------------
 
 class Orchestrator:
-    """
-    Executes a workflow by running agents in dependency order.
-
-    Usage:
-        orchestrator = Orchestrator()
-        result = orchestrator.run(
-            user_request="Analyze the attached CSV",
-            files=["data.csv"],
-            workflow_name="data_analysis",
-        )
-    """
+    """Executes workflows by running agents in dependency order."""
 
     def run(
         self,
         user_request: str,
         files: list[str] | None = None,
-        workflow_name: str = "data_analysis",
+        workflow_name: str = "auto",
         tasks: list[AgentTask] | None = None,
     ) -> WorkflowResult:
-        """
-        Execute a workflow.
-
-        Args:
-            user_request:  The user's instruction.
-            files:         Attached file paths.
-            workflow_name: Name of a predefined workflow, or "custom"
-                          if tasks are provided directly.
-            tasks:         Optional custom task list (overrides workflow_name).
-
-        Returns:
-            WorkflowResult with all agent outputs, artifacts, and errors.
-        """
+        """Execute a workflow."""
         files = files or []
         start_time = time.monotonic()
+
+        # Auto-route if needed
+        if workflow_name == "auto":
+            workflow_name = auto_route(user_request, files)
+            logger.info("Auto-routed to workflow: %s", workflow_name)
 
         # Resolve workflow tasks
         if tasks is not None:
@@ -226,7 +312,6 @@ class Orchestrator:
             len(files),
         )
 
-        # Sort tasks in dependency order
         try:
             sorted_tasks = _topological_sort(workflow_tasks)
         except ValueError as exc:
@@ -236,11 +321,9 @@ class Orchestrator:
             result.duration_ms = (time.monotonic() - start_time) * 1000
             return result
 
-        # Track which agents completed successfully
         completed_results: dict[str, AgentResult] = {}
         has_failures = False
 
-        # Execute each agent in order
         for task in sorted_tasks:
             step_start = time.monotonic()
             step_info = {
@@ -248,14 +331,12 @@ class Orchestrator:
                 "instruction": task.instruction,
                 "depends_on": task.depends_on,
                 "status": "pending",
-                "started_at": datetime.now(timezone.utc).isoformat(
-                    timespec="seconds"
-                ),
+                "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             }
 
             logger.info("AGENT START — %s", task.agent_name)
 
-            # Check if dependencies were satisfied
+            # Check dependencies
             missing_deps = [
                 dep for dep in task.depends_on
                 if dep not in completed_results
@@ -283,7 +364,7 @@ class Orchestrator:
                 result.steps.append(step_info)
                 continue
 
-            # Look up the adapter
+            # Look up adapter
             try:
                 adapter = get_agent(task.agent_name)
             except (KeyError, RuntimeError) as exc:
@@ -326,7 +407,7 @@ class Orchestrator:
                 result.steps.append(step_info)
                 continue
 
-            # Build the context for this agent
+            # Build context
             context = AgentContext(
                 task=task,
                 user_request=user_request,
@@ -338,11 +419,10 @@ class Orchestrator:
                 },
             )
 
-            # Execute the adapter
+            # Execute
             try:
                 agent_result = adapter(context)
 
-                # Ensure agent_name is set
                 if not agent_result.agent_name:
                     agent_result.agent_name = task.agent_name
 
@@ -371,9 +451,7 @@ class Orchestrator:
 
                 logger.error(
                     "AGENT ERROR — %s (%.0f ms): %s",
-                    task.agent_name,
-                    step_duration,
-                    error_msg,
+                    task.agent_name, step_duration, error_msg,
                 )
 
                 agent_result = AgentResult(
@@ -389,13 +467,11 @@ class Orchestrator:
                 has_failures = True
 
                 result.results[task.agent_name] = agent_result
-                result.errors.append(
-                    f"[{task.agent_name}] {error_msg}"
-                )
+                result.errors.append(f"[{task.agent_name}] {error_msg}")
 
             result.steps.append(step_info)
 
-        # Determine overall status
+        # Final status
         total_duration = (time.monotonic() - start_time) * 1000
         result.duration_ms = total_duration
 
@@ -408,12 +484,9 @@ class Orchestrator:
 
         logger.info(
             "WORKFLOW COMPLETE — %s, status: %s, duration: %.0f ms, "
-            "agents: %d completed / %d total",
-            workflow_name,
-            result.status,
-            total_duration,
-            len(completed_results),
-            len(sorted_tasks),
+            "agents: %d/%d completed",
+            workflow_name, result.status, total_duration,
+            len(completed_results), len(sorted_tasks),
         )
 
         return result
