@@ -17,6 +17,7 @@ class ChatRequest(BaseModel):
     """Incoming chat message from the frontend."""
     message: str = Field(..., min_length=1, max_length=10000)
     session_id: Optional[str] = Field(None, description="Existing session ID to continue")
+    document_ids: list[str] = Field(default_factory=list, description="Associated document IDs")
 
 
 class ChatResponse(BaseModel):
@@ -24,6 +25,9 @@ class ChatResponse(BaseModel):
     response: str
     model: str
     session_id: str = Field("", description="Session ID for conversation continuity")
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+    artifacts: list[dict[str, Any]] = Field(default_factory=list)
+    timeline: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

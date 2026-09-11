@@ -27,7 +27,7 @@ class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
     @abstractmethod
-    async def generate(self, prompt: str, model: str) -> str:
+    async def generate(self, prompt: str, model: str, system: str = None) -> str:
         pass
 
     @abstractmethod
@@ -49,6 +49,19 @@ class LLMGenerationError(Exception):
     pass
 
 
+SOVEREIGN_SYSTEM_PROMPT = """You are Sovereign AI Workbench, an on-premise, air-gapped, sovereign agentic AI system for confidential industrial operations.
+You operate entirely locally with open-weight models (such as Qwen and local tools) with zero cloud external services.
+The system features 6 core cooperating agents:
+1. Orchestrator Agent: Routes tasks, coordinates agent dependencies, and manages state.
+2. OCR Agent: Extracts text and tables from local documents (PDF, scans, images) using local PyMuPDF and pytesseract.
+3. RAG Agent: Indexes documents into FAISS vector database with local embeddings, retrieving SOPs and engineering standards with citations.
+4. Vision Agent: Analyzes equipment photos, P&ID diagrams, and visual anomalies using local vision models.
+5. Data Analysis Agent: Analyzes industrial time-series sensor data, CSVs, and telemetry for anomalies, trends, and statistics.
+6. Report Agent: Synthesizes evidence from upstream agents into formal documents (DOCX, PDF) and Approval Notes.
+
+Always answer accurately, professionally, and concisely as the Sovereign AI Workbench assistant."""
+
+
 # ---------------------------------------------------------------------------
 # Ollama provider
 # ---------------------------------------------------------------------------
@@ -65,7 +78,7 @@ class OllamaProvider(LLMProvider):
             pool=30.0,
         )
 
-    async def generate(self, prompt: str, model: str) -> str:
+    async def generate(self, prompt: str, model: str, system: str = None) -> str:
         """Send a prompt to Ollama and return the generated text."""
         url = f"{self.base_url}/api/generate"
         payload = {
@@ -77,6 +90,8 @@ class OllamaProvider(LLMProvider):
                 "temperature": 0.7,
             },
         }
+        if system:
+            payload["system"] = system
 
         logger.info("Sending request to Ollama (model: %s)", model)
 
@@ -188,7 +203,11 @@ class LLMService:
     async def chat(self, message: str) -> tuple[str, str]:
         """Send a user message and return (response_text, model_name)."""
         logger.info("Chat request — model: %s", self.model)
-        response = await self.provider.generate(prompt=message, model=self.model)
+        response = await self.provider.generate(
+            prompt=message,
+            model=self.model,
+            system=SOVEREIGN_SYSTEM_PROMPT,
+        )
         return response, self.model
 
     async def generate(self, prompt: str, model: str = None) -> str:

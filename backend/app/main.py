@@ -176,7 +176,55 @@ async def chat(request: ChatRequest):
         # Save user message
         repo.create_message(db, session_id, "user", request.message)
 
-        # Generate response
+        # If document_ids are provided with the chat message, route through workflow orchestrator
+        if request.document_ids:
+            logger.info("Chat request includes %d document(s) — executing workflow", len(request.document_ids))
+            wf_req = WorkflowRunRequest(
+                workflow="auto",
+                message=request.message,
+                document_ids=request.document_ids,
+                session_id=session_id,
+            )
+            wf_res = await run_workflow(wf_req)
+            
+            # Extract citations, artifacts, and summary from workflow results
+            wf_artifacts = wf_res.get("artifacts_details", [])
+            wf_steps = wf_res.get("steps", [])
+            
+            # Format high-level assistant response
+            rag_res = wf_res.get("agent_results", {}).get("rag", {}).get("data", {})
+            citations = rag_res.get("citations", [])
+            citations_list = [{"filename": str(c).split(",")[0].replace("[Source: ", "").strip(), "page": 1} for c in citations]
+            
+            rep_res = wf_res.get("agent_results", {}).get("report", {}).get("data", {})
+            approval_status = rep_res.get("approval_status", "")
+            
+            response_text = (
+                f"Multi-Agent Workflow '{wf_res.get('workflow_name')}' completed successfully.\n\n"
+                f"• Execution: {len(wf_steps)} agents executed\n"
+                f"• Status: {wf_res.get('status')}\n"
+            )
+            if approval_status == "pending_approval":
+                response_text += "• Approval Status: PENDING APPROVAL (Formal Approval Note generated)\n"
+            if wf_artifacts:
+                response_text += f"• Generated Artifacts: {', '.join(a['filename'] for a in wf_artifacts)}\n"
+            if citations:
+                response_text += f"\nRelevant Guidance Retrieved:\n" + "\n".join(f"  - {c}" for c in citations[:4])
+            
+            # Save assistant message
+            repo.create_message(db, session_id, "assistant", response_text, model="sovereign-agentic-workflow")
+            audit_log(CHAT_MESSAGE, resource=session_id)
+            
+            return ChatResponse(
+                response=response_text,
+                model="sovereign-agentic-workflow",
+                session_id=session_id,
+                citations=citations_list,
+                artifacts=wf_artifacts,
+                timeline=[{"label": f"{s.get('agent', '').upper()} Agent", "status": s.get("status")} for s in wf_steps],
+            )
+
+        # Generate standard chat response
         try:
             response_text, model_used = await llm_service.chat(request.message)
         except LLMConnectionError as exc:
@@ -278,7 +326,8 @@ async def run_workflow(request: WorkflowRunRequest):
                 error=step.get("error"),
             )
 
-        # Persist artifacts
+        # Persist artifacts and collect artifact details
+        artifacts_details = []
         for artifact_path in response_data.get("artifacts", []):
             p = Path(artifact_path)
             if p.exists():
@@ -294,6 +343,13 @@ async def run_workflow(request: WorkflowRunRequest):
                     size=p.stat().st_size if p.exists() else 0,
                 )
                 audit_log(ARTIFACT_CREATED, resource=art.filename, metadata={"artifact_id": art.id})
+                artifacts_details.append({
+                    "id": art.id,
+                    "filename": art.filename,
+                    "path": str(p),
+                    "download_url": f"/api/artifacts/{art.id}/download",
+                    "size": art.size,
+                })
 
         # Update workflow run
         status = response_data.get("status", "completed")
@@ -305,8 +361,9 @@ async def run_workflow(request: WorkflowRunRequest):
             metadata={"status": status, "duration_ms": response_data.get("duration_ms")},
         )
 
-        # Add workflow_id to response
+        # Add workflow_id and artifact details to response
         response_data["workflow_id"] = wf_run.id
+        response_data["artifacts_details"] = artifacts_details
 
         logger.info("Workflow completed — status: %s", status)
         return response_data

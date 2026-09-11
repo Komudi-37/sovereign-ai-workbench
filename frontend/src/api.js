@@ -13,11 +13,11 @@ async function fetchWithHandleError(url, options) {
   }
 }
 
-export async function sendChatMessage(message, sessionId = null) {
+export async function sendChatMessage(message, sessionId = null, documentIds = []) {
   return fetchWithHandleError(`${API_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, session_id: sessionId })
+    body: JSON.stringify({ message, session_id: sessionId, document_ids: documentIds })
   });
 }
 

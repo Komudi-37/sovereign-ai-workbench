@@ -139,8 +139,13 @@ def ocr_adapter(context):
         if "error" in res:
             all_errors.append(res["error"])
         else:
-            all_text.append(res.get("text", ""))
-            all_pages.extend(res.get("pages", []))
+            file_text = res.get("text", "")
+            all_text.append(file_text)
+            file_name = pathlib.Path(file_path).name
+            file_pages = res.get("pages", [])
+            for p in file_pages:
+                p["document"] = file_name
+            all_pages.extend(file_pages)
             if res.get("warnings"):
                 all_warnings.extend(res["warnings"])
             
@@ -148,7 +153,7 @@ def ocr_adapter(context):
                 base_name = pathlib.Path(file_path).stem
                 out_file = agent.output_dir / f"{base_name}_ocr.txt"
                 with open(out_file, "w", encoding="utf-8") as f:
-                    f.write(res.get("text", ""))
+                    f.write(file_text)
                 metadata[file_path] = res.get("metadata", {})
             except Exception as e:
                 all_warnings.append(f"Failed to save output for {file_path}: {e}")
