@@ -18,7 +18,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.models import ChatRequest, ChatResponse, HealthResponse
+from app.models import (
+    ChatRequest,
+    ChatResponse,
+    HealthResponse,
+    WorkflowRequest,
+    WorkflowResponse,
+)
 from app.services.llm import (
     LLMConnectionError,
     LLMGenerationError,
@@ -139,3 +145,66 @@ async def chat(request: ChatRequest):
             status_code=500,
             detail="An unexpected error occurred. Check the backend logs for details.",
         )
+
+
+# ---------------------------------------------------------------------------
+# Workflow endpoint — orchestrated multi-agent execution
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/workflows/run", response_model=WorkflowResponse)
+async def run_workflow(request: WorkflowRequest):
+    """
+    Execute a multi-agent workflow.
+
+    Accepts a user instruction, optional file paths, and a workflow name.
+    The orchestrator runs the appropriate agents in dependency order and
+    returns structured results.
+
+    Available workflows:
+        - data_analysis: Data Analysis Agent → Report Agent
+        - vision: Vision Agent → Report Agent
+    """
+    logger.info(
+        "Workflow request — workflow: %s, files: %d",
+        request.workflow,
+        len(request.files),
+    )
+
+    try:
+        # Lazy import to avoid loading heavy agent dependencies at startup
+        from agents.orchestrator.orchestrator import Orchestrator
+
+        orchestrator = Orchestrator()
+
+        workflow_result = orchestrator.run(
+            user_request=request.instruction,
+            files=request.files,
+            workflow_name=request.workflow,
+        )
+
+        response_data = workflow_result.to_dict()
+
+        logger.info(
+            "Workflow completed — status: %s, duration: %.0f ms",
+            response_data["status"],
+            response_data["duration_ms"],
+        )
+
+        return WorkflowResponse(**response_data)
+
+    except ValueError as exc:
+        logger.error("Workflow validation error: %s", exc)
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+    except Exception as exc:
+        logger.exception("Unexpected workflow error: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="An unexpected error occurred during workflow execution. "
+                   "Check the backend logs for details.",
+        )
+
