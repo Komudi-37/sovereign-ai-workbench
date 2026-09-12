@@ -27,7 +27,14 @@ class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
 
     @abstractmethod
-    async def generate(self, prompt: str, model: str, system: str = None) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        model: str,
+        system: str = None,
+        options: dict = None,
+        raw: bool = False,
+    ) -> str:
         pass
 
     @abstractmethod
@@ -78,22 +85,46 @@ class OllamaProvider(LLMProvider):
             pool=30.0,
         )
 
-    async def generate(self, prompt: str, model: str, system: str = None) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        model: str,
+        system: str = None,
+        options: dict = None,
+        raw: bool = False,
+    ) -> str:
         """Send a prompt to Ollama and return the generated text."""
         url = f"{self.base_url}/api/generate"
+        gen_options = {
+            "num_predict": 512,
+            "temperature": 0.7,
+        }
+        if options:
+            gen_options.update(options)
+
         payload = {
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "options": {
-                "num_predict": 256,
-                "temperature": 0.7,
-            },
+            "options": gen_options,
         }
-        if system:
+        if raw:
+            payload["raw"] = True
+        if system and not raw:
             payload["system"] = system
 
         logger.info("Sending request to Ollama (model: %s)", model)
+
+        # Record network event via network_monitor
+        try:
+            from app.services.network_monitor import network_monitor
+            network_monitor.record_connection(
+                source="LLMService",
+                destination=self.base_url,
+                reason=f"Local LLM inference generation (model: {model})",
+            )
+        except Exception:
+            pass
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -200,20 +231,35 @@ class LLMService:
         self.provider = provider
         self.model = model
 
-    async def chat(self, message: str) -> tuple[str, str]:
-        """Send a user message and return (response_text, model_name)."""
-        logger.info("Chat request — model: %s", self.model)
+    async def chat(self, message: str, history: list[dict] = None) -> tuple[str, str]:
+        """Send a user message with optional conversation history and return (response_text, model_name)."""
+        logger.info("Chat request — model: %s (history items: %d)", self.model, len(history) if history else 0)
+        if history:
+            turns = []
+            for h in history[-6:]:
+                role = h.get("role", "user")
+                content = (h.get("content") or "").strip()
+                if content:
+                    if len(content) > 500:
+                        content = content[:500] + "..."
+                    speaker = "User" if role == "user" else "Assistant"
+                    turns.append(f"{speaker}: {content}")
+            turns.append(f"User: {message}")
+            prompt = "\n\n".join(turns) + "\n\nAssistant:"
+        else:
+            prompt = message
+
         response = await self.provider.generate(
-            prompt=message,
+            prompt=prompt,
             model=self.model,
             system=SOVEREIGN_SYSTEM_PROMPT,
         )
         return response, self.model
 
-    async def generate(self, prompt: str, model: str = None) -> str:
+    async def generate(self, prompt: str, model: str = None, system: str = None, options: dict = None, raw: bool = False) -> str:
         """Generate text with an optionally specified model."""
         model = model or self.model
-        return await self.provider.generate(prompt=prompt, model=model)
+        return await self.provider.generate(prompt=prompt, model=model, system=system, options=options, raw=raw)
 
     async def health_check(self) -> bool:
         return await self.provider.health_check()

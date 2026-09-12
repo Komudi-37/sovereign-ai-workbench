@@ -13,6 +13,8 @@ from .calculator import (
     AnalysisSpec,
     ChartSpec,
     detect_trends,
+    detect_anomalies,
+    compute_correlations,
     is_numeric,
     prepare_data,
     require_columns,
@@ -92,7 +94,7 @@ def safe_csv(frame: pd.DataFrame, path: Path) -> None:
 
 
 class DataAnalysisAgent:
-    SUPPORTED_FILES = {".csv", ".xlsx", ".xls", ".json"}
+    SUPPORTED_FILES = {".csv", ".xlsx", ".xls", ".json", ".txt"}
 
     def __init__(
         self,
@@ -166,14 +168,52 @@ class DataAnalysisAgent:
 
         datasets = []
 
-        if extension == ".csv":
-            frame = pd.read_csv(
-                path,
-                sep=separator,
-                encoding=encoding,
-                dtype=csv_dtypes,
-                nrows=self.max_rows + 1,
-            )
+        if extension in {".csv", ".txt"}:
+            # Support comma, tab, or whitespace delimited files
+            try:
+                # If separator is default comma, but file is .txt or has tabs, try auto-sniffing
+                if extension == ".txt" and separator == ",":
+                    try:
+                        frame = pd.read_csv(
+                            path,
+                            sep=None,
+                            engine="python",
+                            encoding=encoding,
+                            dtype=csv_dtypes,
+                            nrows=self.max_rows + 1,
+                        )
+                    except Exception:
+                        frame = pd.read_csv(
+                            path,
+                            sep=separator,
+                            encoding=encoding,
+                            dtype=csv_dtypes,
+                            nrows=self.max_rows + 1,
+                        )
+                else:
+                    frame = pd.read_csv(
+                        path,
+                        sep=separator,
+                        encoding=encoding,
+                        dtype=csv_dtypes,
+                        nrows=self.max_rows + 1,
+                    )
+            except pd.errors.EmptyDataError:
+                raise ValueError("Dataset is empty or has no columns to parse.")
+            except Exception as e:
+                # Fallback to auto-detecting delimiter (e.g. tabs or spaces)
+                try:
+                    frame = pd.read_csv(
+                        path,
+                        sep=None,
+                        engine="python",
+                        encoding=encoding,
+                        dtype=csv_dtypes,
+                        nrows=self.max_rows + 1,
+                    )
+                except Exception:
+                    raise ValueError(f"Failed to parse tabular data from {path.name}: {e}")
+
             datasets.append(
                 Dataset(
                     path.stem,
@@ -499,29 +539,51 @@ class DataAnalysisAgent:
         summary_path = run_directory / "analysis.json"
         artifacts.append(str(summary_path.resolve()))
 
+        # Detect statistical anomalies & outliers
+        anomalies = detect_anomalies(frame, numeric_columns)
+
+        # Compute pairwise correlations
+        correlations = compute_correlations(frame, numeric_columns)
+
+        categorical_columns = [c for c in frame.columns if c not in numeric_columns and c != spec.date_column]
+
+        # Determine confidence based on data completeness
+        total_cells = len(frame) * len(frame.columns) if len(frame.columns) else 1
+        missing_count = int(frame.isna().sum().sum())
+        missing_ratio = missing_count / total_cells if total_cells > 0 else 0
+        confidence = "high" if missing_ratio < 0.05 else ("medium" if missing_ratio < 0.20 else "low")
+
         result = json_safe(
             {
                 "dataset": dataset.name,
                 "source": dataset.source,
                 "specification": spec.model_dump(mode="json"),
                 "row_count": int(len(frame)),
-                "columns": {
+                "rows": int(len(frame)),
+                "columns": list(frame.columns),
+                "column_types": {
                     column: str(dtype)
                     for column, dtype in frame.dtypes.items()
                 },
+                "numeric_columns": numeric_columns,
+                "categorical_columns": categorical_columns,
                 "missing_values": {
                     column: int(count)
                     for column, count in frame.isna().sum().items()
                 },
                 "duplicate_rows": int(frame.duplicated().sum()),
                 "statistics": statistics(frame),
+                "summary_statistics": statistics(frame),
                 "trends": trends,
+                "anomalies": anomalies,
+                "correlations": correlations,
                 "preview": preview(frame),
                 "grouped_preview": (
                     preview(grouped) if grouped is not None else None
                 ),
                 "charts": charts,
                 "warnings": warnings,
+                "confidence": confidence,
                 "artifacts": artifacts,
             }
         )
@@ -595,26 +657,70 @@ def data_analysis_adapter(context):
         else AnalysisSpec()
     )
 
+    # Use secure WorkspaceManager for analysis artifacts
+    try:
+        from app.services.workspace import workspace_manager
+        run_ws = workspace_manager.create_run_workspace()
+        agent.output_directory = run_ws["generated"]
+    except Exception:
+        pass
+
     results = [
         agent.analyze(dataset, spec)
         for dataset in datasets
     ]
 
+    # Generate helpful industrial insights for prompt context
+    user_req = (context.user_request or "").lower()
+    task_instr = (context.task.instruction or "").lower()
+    combined_query = f"{user_req} {task_instr}"
+
+    key_answers = []
+    for r in results:
+        ds_name = r.get("dataset", "Dataset")
+        stats = r.get("statistics", {})
+        trends = r.get("trends", {})
+        anomalies = r.get("anomalies", [])
+
+        # Check for equipment / max temperature / reading queries
+        if "highest" in combined_query or "max" in combined_query or "average" in combined_query or "unusual" in combined_query or "anomaly" in combined_query:
+            for col, s in stats.items():
+                if isinstance(s, dict) and s.get("mean") is not None:
+                    if "temp" in col.lower():
+                        key_answers.append(f"In {ds_name}, {col} has average {s['mean']}°C, max {s['max']}°C, min {s['min']}°C.")
+                    elif "press" in col.lower():
+                        key_answers.append(f"In {ds_name}, {col} has average {s['mean']} bar, max {s['max']} bar, min {s['min']} bar.")
+                    elif "vib" in col.lower():
+                        key_answers.append(f"In {ds_name}, {col} has average {s['mean']} mm/s, max {s['max']} mm/s.")
+
+        # Check for trend questions
+        if "trend" in combined_query or "increasing" in combined_query or "rising" in combined_query:
+            for col, t in trends.items():
+                if isinstance(t, dict) and t.get("direction"):
+                    key_answers.append(f"Parameter '{col}' shows a {t['direction']} trend (slope: {t.get('slope')} per {t.get('slope_per')}).")
+
+        # Check for anomalies
+        if anomalies:
+            key_answers.append(f"Detected {len(anomalies)} statistical outlier/anomaly reading(s) exceeding 1.5*IQR bounds.")
+
+    total_charts = sum(len(item.get("charts", [])) for item in results)
+    summary_msg = f"Analyzed {len(results)} dataset(s) and generated {total_charts} local visualization chart(s)."
+    if key_answers:
+        summary_msg += " Key findings:\n• " + "\n• ".join(key_answers[:5])
+
     return AgentResult(
-        summary=(
-            f"Analyzed {len(results)} dataset(s) and created "
-            f"{sum(len(item['charts']) for item in results)} chart(s)."
-        ),
+        summary=summary_msg,
         data={
             "datasets": results,
+            "key_findings": key_answers,
             "execution_mode": (
                 "configured_specification"
                 if spec_path
                 else "descriptive_defaults"
             ),
             "notes": [
-                "This adapter does not interpret arbitrary natural-language "
-                "calculations. Custom operations require AnalysisSpec."
+                "Deterministic statistical calculations from local data.",
+                "Statistical indicators are not certified engineering diagnoses."
             ],
         },
         artifacts=[

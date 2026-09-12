@@ -107,6 +107,14 @@ VISION_REPORT_WORKFLOW = [
     ),
 ]
 
+CODING_WORKFLOW = [
+    AgentTask(
+        agent_name="coding",
+        instruction="Generate Python code, execute securely in sandbox, and repair if needed.",
+        depends_on=[],
+    ),
+]
+
 # Map of workflow names to their task lists
 WORKFLOWS: dict[str, list[AgentTask]] = {
     "data_analysis": DATA_ANALYSIS_WORKFLOW,
@@ -115,6 +123,7 @@ WORKFLOWS: dict[str, list[AgentTask]] = {
     "ocr": OCR_WORKFLOW,
     "ocr_rag_report": OCR_RAG_REPORT_WORKFLOW,
     "full_inspection": FULL_INSPECTION_WORKFLOW,
+    "coding": CODING_WORKFLOW,
 }
 
 
@@ -126,6 +135,7 @@ WORKFLOWS: dict[str, list[AgentTask]] = {
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
 DATA_EXTENSIONS = {".csv", ".xlsx", ".xls", ".json"}
 DOCUMENT_EXTENSIONS = {".pdf", ".docx", ".txt", ".pptx"}
+CODE_EXTENSIONS = {".py", ".sh", ".sql", ".js"}
 
 
 def auto_route(user_request: str, files: list[str]) -> str:
@@ -141,10 +151,19 @@ def auto_route(user_request: str, files: list[str]) -> str:
     has_images = bool(file_exts & IMAGE_EXTENSIONS)
     has_data = bool(file_exts & DATA_EXTENSIONS)
     has_documents = bool(file_exts & DOCUMENT_EXTENSIONS)
+    has_code = bool(file_exts & CODE_EXTENSIONS)
 
     # Keyword-based routing
+    explicit_coding_keywords = [
+        "write python", "write code", "write a script", "write script",
+        "execute script", "debug", "run script", "run python", "execute code",
+        "repair code", "coding task", "create a program", "programming"
+    ]
+    coding_keywords = ["python", "calculate", "script", "code", "sandbox",
+                       "formula", "compute", "computation", "algorithm", "repair code", "math"]
     data_keywords = ["analyze", "analysis", "csv", "data", "chart", "trend",
-                     "statistic", "anomal", "reading", "equipment data", "excel"]
+                     "statistic", "anomal", "reading", "equipment data", "excel",
+                     "telemetry", "risk", "recommendation"]
     vision_keywords = ["image", "photo", "picture", "visual", "inspect",
                        "equipment photo", "p&id", "diagram", "camera"]
     ocr_keywords = ["read", "extract", "ocr", "scan", "text from"]
@@ -153,6 +172,9 @@ def auto_route(user_request: str, files: list[str]) -> str:
     report_keywords = ["report", "approval note", "generate", "document",
                        "prepare", "create", "summarize", "summary"]
 
+    has_explicit_coding = any(k in request_lower for k in explicit_coding_keywords) or (has_code and not has_data)
+    has_data_coding = has_data and any(k in request_lower for k in ["write python", "execute script", "write script", "debug code", "write code", "run script"])
+    has_coding_intent = any(k in request_lower for k in coding_keywords)
     has_data_intent = any(k in request_lower for k in data_keywords)
     has_vision_intent = any(k in request_lower for k in vision_keywords)
     has_ocr_intent = any(k in request_lower for k in ocr_keywords)
@@ -160,8 +182,17 @@ def auto_route(user_request: str, files: list[str]) -> str:
     has_report_intent = any(k in request_lower for k in report_keywords)
 
     # Decision logic
+    # 1. Explicit coding request on data (e.g. "Write Python code to analyze this CSV")
+    if has_data_coding:
+        return "coding"
+
+    # 2. High-Priority Data Analysis for tabular data files or data analysis intent
     if has_data and (has_data_intent or not has_documents):
         return "data_analysis"
+
+    # 3. Explicit coding requests without data
+    if (has_explicit_coding or (has_coding_intent and not has_data and not has_documents and not has_images)):
+        return "coding"
 
     if has_images and has_vision_intent:
         if has_report_intent:
@@ -183,6 +214,9 @@ def auto_route(user_request: str, files: list[str]) -> str:
 
     if has_images:
         return "vision"
+
+    if has_coding_intent:
+        return "coding"
 
     # Default: OCR + RAG + Report for documents, or data_analysis for data
     if has_data:
@@ -207,6 +241,7 @@ class WorkflowResult:
         self.warnings: list[str] = []
         self.errors: list[str] = []
         self.duration_ms: float = 0
+        self.execution_plan: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -221,6 +256,7 @@ class WorkflowResult:
             "warnings": self.warnings,
             "errors": self.errors,
             "duration_ms": round(self.duration_ms, 1),
+            "execution_plan": self.execution_plan,
         }
 
 
@@ -286,15 +322,26 @@ class Orchestrator:
         files = files or []
         start_time = time.monotonic()
 
-        # Auto-route if needed
+        # Intelligent Task Planning layer
+        from agents.orchestrator.planner import task_planner
+        plan = task_planner.plan(
+            user_request=user_request,
+            files=files,
+            requested_workflow=workflow_name if workflow_name != "auto" else None,
+        )
+
+        # Auto-route or adopt planner workflow
         if workflow_name == "auto":
-            workflow_name = auto_route(user_request, files)
-            logger.info("Auto-routed to workflow: %s", workflow_name)
+            workflow_name = plan.workflow_name or auto_route(user_request, files)
+            logger.info("Task Planner routed to workflow '%s' (confidence: %.2f, intent: %s)", workflow_name, plan.confidence, plan.intent)
 
         # Resolve workflow tasks
         if tasks is not None:
             workflow_tasks = tasks
             workflow_name = workflow_name or "custom"
+        elif plan.tasks:
+            workflow_tasks = plan.tasks
+            workflow_name = plan.workflow_name
         else:
             if workflow_name not in WORKFLOWS:
                 raise ValueError(
@@ -304,6 +351,7 @@ class Orchestrator:
             workflow_tasks = WORKFLOWS[workflow_name]
 
         result = WorkflowResult(workflow_name=workflow_name)
+        result.execution_plan = plan.model_dump(mode="json")
 
         logger.info(
             "WORKFLOW START — name: %s, agents: %s, files: %d",

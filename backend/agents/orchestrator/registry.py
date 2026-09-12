@@ -35,6 +35,10 @@ def _load_rag():
     from agents.rag.rag_agent import rag_adapter
     return rag_adapter
 
+def _load_coding():
+    from agents.coding.coding_agent import coding_adapter
+    return coding_adapter
+
 
 # ---------------------------------------------------------------------------
 # Registry
@@ -46,6 +50,7 @@ AGENT_REGISTRY: dict[str, Callable | None] = {
     "report":        _load_report,
     "ocr":           _load_ocr,
     "rag":           _load_rag,
+    "coding":        _load_coding,
 }
 
 

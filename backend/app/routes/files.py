@@ -34,18 +34,15 @@ MAX_SIZE = settings.max_upload_size_mb * 1024 * 1024  # Convert MB to bytes
 
 
 def _get_upload_dir() -> Path:
-    """Get or create the document upload directory."""
-    upload_dir = Path(settings.data_dir) / "documents"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    return upload_dir
+    """Get or create the document upload directory via workspace_manager."""
+    from app.services.workspace import workspace_manager
+    return workspace_manager.uploads_dir
 
 
 def _safe_filename(filename: str) -> str:
     """Sanitize a filename to prevent path traversal."""
-    # Remove any path components, keep only the base name
-    name = Path(filename).name
-    # Replace potentially dangerous characters
-    return name.replace("..", "_").replace("/", "_").replace("\\", "_")
+    from app.services.workspace import sanitize_filename
+    return sanitize_filename(filename)
 
 
 @router.post("/upload")

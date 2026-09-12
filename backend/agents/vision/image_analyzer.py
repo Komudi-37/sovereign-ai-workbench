@@ -483,31 +483,90 @@ def vision_adapter(context):
     )
     reference_context = "\n\n".join(reference_parts)
 
+    from agents.vision.image_preprocessor import ImagePreprocessor, PreprocessingError
+    preprocessor = ImagePreprocessor()
+
     results = []
-    for filename in files:
-        path = analyzer._validate_path(filename)
-        document_hash = analyzer._file_hash(path)
-        
-        remaining = analyzer.config.max_visuals - len(results)
-        if remaining <= 0:
-            break
-            
-        if path.suffix.lower() == ".pdf":
-            visuals = analyzer._prepare_pdf(path, document_hash, None, remaining)
-        else:
-            visuals = analyzer._prepare_raster(path, document_hash, remaining)
-            
-        for visual in visuals:
-            result_dict = local_model.analyze(
-                image_bytes=visual.image_bytes,
-                source=visual.source,
-                request=request_text,
-                reference_context=reference_context
-            )
-            results.append(result_dict)
+    run_ws = None
+    try:
+        from app.services.workspace import workspace_manager
+        run_ws = workspace_manager.create_run_workspace()
+    except Exception:
+        pass
+
+    try:
+        for filename in files:
+            try:
+                processed_visuals = preprocessor.process_file_in_workspace(
+                    filename,
+                    run_workspace=run_ws,
+                )
+            except PreprocessingError as pe:
+                logger.warning("Preprocessing failed for %s: %s", filename, pe)
+                continue
+            except Exception as pe:
+                logger.warning("Unexpected error preprocessing %s: %s", filename, pe)
+                continue
+
+            for pv in processed_visuals:
+                if len(results) >= analyzer.config.max_visuals:
+                    break
+
+                source_ref = SourceReference(
+                    source_id=f"{pv.source_filename}_{pv.page_number or 1}",
+                    file_name=pv.source_filename,
+                    source_path=str(Path(filename).name),  # Avoid exposing absolute paths
+                    page_number=pv.page_number,
+                    frame_number=None,
+                    original_width=pv.original_width,
+                    original_height=pv.original_height,
+                    analyzed_width=pv.width,
+                    analyzed_height=pv.height,
+                    warnings=pv.warnings,
+                )
+
+                result_dict = local_model.analyze(
+                    image_bytes=pv.image_bytes,
+                    source=source_ref,
+                    request=request_text,
+                    reference_context=reference_context,
+                )
+                # Attach preprocessing warnings and dimensions
+                result_dict["was_resized"] = pv.was_resized
+                result_dict["dimensions"] = {"width": pv.width, "height": pv.height}
+                if pv.warnings:
+                    existing_warnings = result_dict.get("warnings", [])
+                    result_dict["warnings"] = list(set(existing_warnings + pv.warnings))
+
+                results.append(result_dict)
+    finally:
+        if run_ws:
+            try:
+                from app.services.workspace import workspace_manager
+                workspace_manager.cleanup_run_temp(run_ws)
+            except Exception:
+                pass
+
+    if not results:
+        return AgentResult(
+            agent_name="vision",
+            status="failed",
+            summary="No visual inputs could be successfully preprocessed or analyzed.",
+            errors=["Preprocessing or visual model analysis yielded no results."]
+        )
+
+    # Compile structured summary
+    total_findings = sum(len(r.get("findings", [])) for r in results)
+    total_objects = sum(len(r.get("objects", [])) for r in results)
+    summary_text = (
+        f"Analyzed {len(results)} visual page(s)/frame(s) locally. "
+        f"Identified {total_objects} visible component(s) and {total_findings} structured finding(s)."
+    )
 
     return AgentResult(
-        summary=f"Analyzed {len(results)} visual page(s)/frame(s) locally.",
+        agent_name="vision",
+        status="completed",
+        summary=summary_text,
         data={"results": results}
     )
 
@@ -528,7 +587,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--model",
-        default=os.getenv("VISION_MODEL", "gpt-4.1-mini"),
+        default=os.getenv("VISION_MODEL", "llava:7b"),
     )
     parser.add_argument(
         "--pdf-pages",

@@ -48,6 +48,16 @@ def generate_embedding(text: str) -> list[float]:
     url = f"{base_url.rstrip('/')}/api/embed"
     
     try:
+        from app.services.network_monitor import network_monitor
+        network_monitor.record_connection(
+            source="EmbeddingService",
+            destination=base_url,
+            reason=f"Local embedding generation (model: {model})",
+        )
+    except Exception:
+        pass
+
+    try:
         with httpx.Client(timeout=10.0) as client:
             response = client.post(
                 url,

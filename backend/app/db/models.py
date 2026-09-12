@@ -53,8 +53,12 @@ class SessionModel(Base):
     updated_at = Column(DateTime, default=_now, onupdate=_now)
 
     user = relationship("UserModel", back_populates="sessions")
-    messages = relationship("MessageModel", back_populates="session", order_by="MessageModel.created_at")
+    messages = relationship("MessageModel", back_populates="session", order_by="MessageModel.created_at", cascade="all, delete-orphan")
     workflow_runs = relationship("WorkflowRunModel", back_populates="session")
+
+    __table_args__ = (
+        Index("ix_sessions_updated_at", "updated_at"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -69,9 +73,14 @@ class MessageModel(Base):
     role = Column(String(20), nullable=False)  # user, assistant, system
     content = Column(Text, nullable=False)
     model = Column(String(100), nullable=True)
+    metadata_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=_now)
 
     session = relationship("SessionModel", back_populates="messages")
+
+    __table_args__ = (
+        Index("ix_messages_session_id", "session_id"),
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -42,10 +42,13 @@ def get_default_user(db: Session) -> UserModel:
 
 
 # ---------------------------------------------------------------------------
-# Sessions
+# Sessions / Conversations
 # ---------------------------------------------------------------------------
 
-def create_session(db: Session, user_id: str, title: str = "New Chat") -> SessionModel:
+def create_session(db: Session, user_id: str = None, title: str = "New Chat") -> SessionModel:
+    if not user_id:
+        user = get_default_user(db)
+        user_id = user.id
     session = SessionModel(user_id=user_id, title=title)
     db.add(session)
     db.commit()
@@ -57,16 +60,49 @@ def get_session(db: Session, session_id: str) -> SessionModel | None:
     return db.query(SessionModel).filter_by(id=session_id).first()
 
 
-def list_sessions(db: Session, limit: int = 50) -> list[SessionModel]:
+def list_sessions(db: Session, limit: int = 100) -> list[SessionModel]:
     return db.query(SessionModel).order_by(SessionModel.updated_at.desc()).limit(limit).all()
+
+
+def update_session_title(db: Session, session_id: str, title: str) -> SessionModel | None:
+    session = db.query(SessionModel).filter_by(id=session_id).first()
+    if session:
+        session.title = title
+        session.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(session)
+    return session
+
+
+def delete_session(db: Session, session_id: str) -> bool:
+    session = db.query(SessionModel).filter_by(id=session_id).first()
+    if session:
+        db.delete(session)
+        db.commit()
+        return True
+    return False
 
 
 # ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
 
-def create_message(db: Session, session_id: str, role: str, content: str, model: str = None) -> MessageModel:
-    msg = MessageModel(session_id=session_id, role=role, content=content, model=model)
+def create_message(
+    db: Session,
+    session_id: str,
+    role: str,
+    content: str,
+    model: str = None,
+    metadata: dict = None,
+) -> MessageModel:
+    metadata_str = json.dumps(metadata) if metadata else None
+    msg = MessageModel(
+        session_id=session_id,
+        role=role,
+        content=content,
+        model=model,
+        metadata_json=metadata_str,
+    )
     db.add(msg)
     db.commit()
     db.refresh(msg)
@@ -80,6 +116,51 @@ def create_message(db: Session, session_id: str, role: str, content: str, model:
 
 def list_messages(db: Session, session_id: str) -> list[MessageModel]:
     return db.query(MessageModel).filter_by(session_id=session_id).order_by(MessageModel.created_at).all()
+
+
+def get_conversation_with_messages(db: Session, session_id: str) -> dict | None:
+    session = db.query(SessionModel).filter_by(id=session_id).first()
+    if not session:
+        return None
+
+    msgs = list_messages(db, session_id)
+    serialized_messages = []
+    for m in msgs:
+        parsed_meta = {}
+        if m.metadata_json:
+            try:
+                parsed_meta = json.loads(m.metadata_json)
+            except Exception:
+                parsed_meta = {}
+
+        serialized_messages.append({
+            "id": m.id,
+            "role": m.role,
+            "content": m.content,
+            "model": m.model,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+            "metadata": parsed_meta,
+            "timeline": parsed_meta.get("timeline", []),
+            "citations": parsed_meta.get("citations", []),
+            "artifacts": parsed_meta.get("artifacts", []),
+            "files": parsed_meta.get("files", []),
+            "workflow_name": parsed_meta.get("workflow_name"),
+            "coding": parsed_meta.get("coding"),
+            "vision": parsed_meta.get("vision"),
+            "data_analysis": parsed_meta.get("data_analysis"),
+            "execution_plan": parsed_meta.get("execution_plan"),
+            "executionPlan": parsed_meta.get("execution_plan"),
+            "workflowName": parsed_meta.get("workflow_name"),
+            "dataAnalysis": parsed_meta.get("data_analysis"),
+        })
+
+    return {
+        "id": session.id,
+        "title": session.title,
+        "created_at": session.created_at.isoformat() if session.created_at else None,
+        "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+        "messages": serialized_messages,
+    }
 
 
 # ---------------------------------------------------------------------------

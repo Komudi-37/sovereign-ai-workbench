@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, File as FileIcon, Image, Code, FileText } from 'lucide-react';
+import { Download, File as FileIcon, Image, Code, FileText, FileSpreadsheet, Presentation } from 'lucide-react';
 import { listArtifacts, downloadArtifact } from '../api';
 
 function ArtifactsPage() {
@@ -25,7 +25,9 @@ function ArtifactsPage() {
     const ext = filename.split('.').pop().toLowerCase();
     if (['png', 'jpg', 'jpeg', 'gif'].includes(ext)) return <Image size={24} />;
     if (['py', 'js', 'html', 'css', 'json'].includes(ext)) return <Code size={24} />;
-    if (['txt', 'md', 'pdf', 'csv'].includes(ext)) return <FileText size={24} />;
+    if (['xlsx', 'xls', 'csv'].includes(ext)) return <FileSpreadsheet size={24} color="#107c41" />;
+    if (['pptx', 'ppt'].includes(ext)) return <Presentation size={24} color="#d24726" />;
+    if (['txt', 'md', 'pdf', 'docx', 'doc'].includes(ext)) return <FileText size={24} />;
     return <FileIcon size={24} />;
   };
 

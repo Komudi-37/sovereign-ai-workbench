@@ -17,6 +17,7 @@ class ChatRequest(BaseModel):
     """Incoming chat message from the frontend."""
     message: str = Field(..., min_length=1, max_length=10000)
     session_id: Optional[str] = Field(None, description="Existing session ID to continue")
+    conversation_id: Optional[str] = Field(None, description="Alias for session_id")
     document_ids: list[str] = Field(default_factory=list, description="Associated document IDs")
 
 
@@ -25,9 +26,30 @@ class ChatResponse(BaseModel):
     response: str
     model: str
     session_id: str = Field("", description="Session ID for conversation continuity")
+    conversation_id: str = Field("", description="Alias for session ID")
     citations: list[dict[str, Any]] = Field(default_factory=list)
     artifacts: list[dict[str, Any]] = Field(default_factory=list)
     timeline: list[dict[str, Any]] = Field(default_factory=list)
+    coding: Optional[dict[str, Any]] = Field(None, description="Coding Agent execution details if applicable")
+    vision: Optional[dict[str, Any]] = Field(None, description="Vision Agent structured visual analysis details")
+    data_analysis: Optional[dict[str, Any]] = Field(None, description="Data Analysis Agent structured results")
+    execution_plan: Optional[dict[str, Any]] = Field(None, description="Task Planner structured execution plan")
+
+
+class CreateConversationRequest(BaseModel):
+    title: Optional[str] = Field(None, max_length=500)
+
+
+class UpdateConversationRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=500)
+
+
+class ConversationResponse(BaseModel):
+    id: str
+    title: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    message_count: int = 0
 
 
 # ---------------------------------------------------------------------------

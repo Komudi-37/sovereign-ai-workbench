@@ -78,7 +78,24 @@ async def download_artifact(artifact_id: str):
         if not artifact:
             raise HTTPException(404, "Artifact not found")
 
-        file_path = Path(artifact.path)
+        file_path = Path(artifact.path).resolve()
+        # Verify file resides strictly within output_dir or data_dir to prevent arbitrary file disclosure
+        from app.config import settings
+        from app.services.workspace import safe_path, PathTraversalError
+
+        allowed = False
+        for allowed_root in [settings.output_dir, settings.data_dir]:
+            try:
+                safe_path(allowed_root, file_path)
+                allowed = True
+                break
+            except PathTraversalError:
+                continue
+
+        if not allowed:
+            logger.warning("Artifact download rejected outside workspace boundaries: %s", file_path)
+            raise HTTPException(403, "Access to file outside secure workspace is forbidden")
+
         if not file_path.exists():
             raise HTTPException(
                 404,

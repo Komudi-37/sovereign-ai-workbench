@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import base64
 import json
@@ -11,6 +11,7 @@ from app.config import settings
 from agents.vision.vision_model import SourceReference
 
 logger = logging.getLogger(__name__)
+
 
 class LocalVisionModel:
     def __init__(self):
@@ -50,15 +51,28 @@ class LocalVisionModel:
         prompt = (
             f"User request: {request}\n\n"
             f"Reference context: {reference_context}\n\n"
-            "Analyze the image and extract the following structured information. "
+            "Analyze the image and extract the following structured visual information. "
+            "Examine engineering elements, equipment tags, valves, pumps, vessels, piping, flow arrows, instruments, visible labels, "
+            "and visible physical condition indicators.\n"
+            "Do not hallucinate internal or invisible conditions. State uncertainty explicitly where visual resolution is limited.\n\n"
             "Return ONLY a JSON object with exactly these keys:\n"
-            "- description: string\n"
-            "- detected_text: string\n"
-            "- objects: array of strings\n"
-            "- findings: array of strings\n"
-            "- warnings: array of strings\n"
-            "- confidence: string (high, medium, or low)"
+            "- description: string (concise visual summary)\n"
+            "- detected_text: string (any visible text, labels, or alphanumeric codes)\n"
+            "- objects: array of strings (visible equipment and components)\n"
+            "- findings: array of objects with keys {\"type\": string, \"label\": string, \"confidence\": float (0.0 to 1.0)}\n"
+            "- warnings: array of strings (uncertainties, ambiguities, or visual caveats)\n"
+            "- confidence: string (\"high\", \"medium\", or \"low\")"
         )
+
+        try:
+            from app.services.network_monitor import network_monitor
+            network_monitor.record_connection(
+                source="VisionAgent",
+                destination=self.base_url,
+                reason=f"Local visual analysis inference (model: {self.model})",
+            )
+        except Exception:
+            pass
 
         try:
             with httpx.Client(timeout=self.timeout) as client:
@@ -81,15 +95,33 @@ class LocalVisionModel:
         try:
             parsed_json = json.loads(response_text)
             
+            raw_findings = parsed_json.get("findings", [])
+            normalized_findings = []
+            if isinstance(raw_findings, list):
+                for item in raw_findings:
+                    if isinstance(item, dict):
+                        normalized_findings.append({
+                            "type": str(item.get("type", "feature")),
+                            "label": str(item.get("label", item.get("name", ""))),
+                            "confidence": float(item.get("confidence", 0.85)) if item.get("confidence") is not None else 0.85,
+                        })
+                    elif isinstance(item, str):
+                        normalized_findings.append({
+                            "type": "feature",
+                            "label": item,
+                            "confidence": 0.85,
+                        })
+
             return {
-                "description": parsed_json.get("description", ""),
-                "detected_text": parsed_json.get("detected_text", ""),
-                "objects": parsed_json.get("objects", []),
-                "findings": parsed_json.get("findings", []),
-                "warnings": parsed_json.get("warnings", []),
-                "confidence": parsed_json.get("confidence", "low"),
+                "description": str(parsed_json.get("description", "")),
+                "detected_text": str(parsed_json.get("detected_text", "")),
+                "objects": list(parsed_json.get("objects", [])),
+                "findings": normalized_findings,
+                "warnings": list(parsed_json.get("warnings", [])),
+                "confidence": str(parsed_json.get("confidence", "medium")),
                 "source_id": source.source_id,
-                "file_name": source.file_name
+                "file_name": source.file_name,
+                "page_number": getattr(source, "page_number", None),
             }
         except Exception as e:
             raise RuntimeError(f"Failed to parse structured output from Ollama: {e}\nResponse text: {response_text}")

@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8000';
+﻿const API_BASE = 'http://localhost:8000';
 
 async function fetchWithHandleError(url, options) {
   try {
@@ -27,6 +27,10 @@ export async function checkHealth() {
 
 export async function getSecurityStatus() {
   return fetchWithHandleError(`${API_BASE}/api/security/status`, { method: 'GET' });
+}
+
+export async function getNetworkEvents(limit = 50) {
+  return fetchWithHandleError(`${API_BASE}/api/security/network-events?limit=${limit}`, { method: 'GET' });
 }
 
 export async function uploadFile(file) {
@@ -94,4 +98,35 @@ export async function listSessions() {
 
 export async function getSessionMessages(sessionId) {
   return fetchWithHandleError(`${API_BASE}/api/sessions/${sessionId}/messages`, { method: 'GET' });
+}
+
+
+export async function listConversations() {
+  return fetchWithHandleError(`${API_BASE}/api/conversations`, { method: 'GET' });
+}
+
+export async function getConversation(conversationId) {
+  return fetchWithHandleError(`${API_BASE}/api/conversations/${conversationId}`, { method: 'GET' });
+}
+
+export async function createConversation(title = 'New Chat') {
+  return fetchWithHandleError(`${API_BASE}/api/conversations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title })
+  });
+}
+
+export async function renameConversation(conversationId, title) {
+  return fetchWithHandleError(`${API_BASE}/api/conversations/${conversationId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title })
+  });
+}
+
+export async function deleteConversation(conversationId) {
+  return fetchWithHandleError(`${API_BASE}/api/conversations/${conversationId}`, {
+    method: 'DELETE'
+  });
 }

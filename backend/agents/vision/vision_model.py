@@ -1,9 +1,8 @@
 import base64
 from dataclasses import dataclass
 import json
-from typing import Literal
+from typing import Any, Literal
 
-from openai import OpenAI
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -130,7 +129,7 @@ class VisionBatchResult(StrictModel):
 
 @dataclass(frozen=True)
 class VisionModelConfig:
-    model: str = "gpt-4.1-mini"
+    model: str = "llava:7b"
     detail: Literal["low", "high", "auto"] = "high"
     timeout_seconds: float = 120.0
     max_retries: int = 2
@@ -199,17 +198,20 @@ Analyze only this image. Do not claim to have inspected other pages.
 
 
 class VisionModel:
+    """Legacy vision model interface stub.
+
+    Preserved for backward-compatibility with existing signatures.
+    External cloud model execution is disabled in the Sovereign AI Workbench.
+    All local visual processing is performed by LocalVisionModel using local Ollama.
+    """
+
     def __init__(
         self,
         config: VisionModelConfig | None = None,
-        client: OpenAI | None = None,
+        client: Any = None,
     ):
         self.config = config or VisionModelConfig()
-
-        self.client = client or OpenAI(
-            timeout=self.config.timeout_seconds,
-            max_retries=self.config.max_retries,
-        )
+        self.client = client
 
     def analyze(
         self,
@@ -219,72 +221,7 @@ class VisionModel:
         request: str,
         reference_context: str = "",
     ) -> VisualResult:
-        if not request.strip():
-            raise ValueError("The analysis request cannot be empty.")
-
-        if not image_bytes:
-            raise ValueError("Image bytes cannot be empty.")
-
-        encoded = base64.b64encode(image_bytes).decode("ascii")
-
-        payload = {
-            "request": request,
-            # Avoid sending the local absolute file path as metadata.
-            "source": {
-                "source_id": source.source_id,
-                "file_name": source.file_name,
-                "page_number": source.page_number,
-                "frame_number": source.frame_number,
-                "analyzed_width": source.analyzed_width,
-                "analyzed_height": source.analyzed_height,
-                "preprocessing_warnings": source.warnings,
-            },
-            "reference_context": reference_context,
-        }
-
-        response = self.client.responses.parse(
-            model=self.config.model,
-            store=False,
-            input=[
-                {
-                    "role": "system",
-                    "content": VISION_INSTRUCTIONS,
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": json.dumps(
-                                payload,
-                                ensure_ascii=False,
-                            ),
-                        },
-                        {
-                            "type": "input_image",
-                            "image_url": (
-                                "data:image/png;base64,"
-                                + encoded
-                            ),
-                            "detail": self.config.detail,
-                        },
-                    ],
-                },
-            ],
-            text_format=VisualAnalysis,
-            max_output_tokens=self.config.max_output_tokens,
-        )
-
-        if response.output_parsed is None:
-            raise RuntimeError(
-                f"No structured analysis returned for "
-                f"{source.source_id}. The response may have been "
-                f"refused or incomplete. Response ID: {response.id}"
-            )
-
-        return VisualResult(
-            source=source,
-            analysis=response.output_parsed,
-            model=response.model,
-            response_id=response.id,
+        raise RuntimeError(
+            "Cloud OpenAI vision is disabled in Sovereign AI Workbench. "
+            "Use LocalVisionModel (Ollama) instead."
         )

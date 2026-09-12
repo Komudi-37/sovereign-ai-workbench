@@ -36,6 +36,17 @@ def init_database() -> None:
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
 
+    # Migrate existing tables if needed (e.g. metadata_json in messages)
+    try:
+        with engine.connect() as conn:
+            cols = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(messages)").fetchall()]
+            if cols and "metadata_json" not in cols:
+                conn.exec_driver_sql("ALTER TABLE messages ADD COLUMN metadata_json TEXT")
+                conn.commit()
+                logger.info("Migrated messages table: added metadata_json column")
+    except Exception as m_exc:
+        logger.debug("Column migration check: %s", m_exc)
+
     # Seed default user if not exists
     db = SessionLocal()
     try:

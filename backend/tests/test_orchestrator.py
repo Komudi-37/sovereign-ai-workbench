@@ -8,6 +8,7 @@ def test_list_agents():
     assert "vision" in agents
     assert "data_analysis" in agents
     assert "report" in agents
+    assert "coding" in agents
 
 def test_auto_route_heuristics():
     assert auto_route("Analyze this equipment data", ["data.csv"]) == "data_analysis"

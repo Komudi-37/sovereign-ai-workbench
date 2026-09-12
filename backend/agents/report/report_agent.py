@@ -161,13 +161,13 @@ class ReportAgent:
     ):
         self.output_directory = Path(output_directory)
 
-        # Default: embed charts generated under the application's outputs.
+        # Embed charts generated under outputs or secure workspace run directories
         self.allowed_image_roots = [
             Path(root).expanduser().resolve()
             for root in (
                 allowed_image_roots
                 if allowed_image_roots is not None
-                else ["outputs"]
+                else ["outputs", "data", "demo_data", "workspaces"]
             )
         ]
 
@@ -392,7 +392,7 @@ class ReportAgent:
                         table = records_table(
                             "Descriptive Statistics",
                             [
-                                {"column": column, **values}
+                                {"dataset": name, "column": column, **values}
                                 for column, values in stats.items()
                                 if isinstance(values, dict)
                             ],
@@ -406,10 +406,32 @@ class ReportAgent:
                         table = records_table(
                             "Trend Analysis",
                             [
-                                {"column": column, **values}
+                                {"metric": column, **values}
                                 for column, values in trends.items()
                                 if isinstance(values, dict)
                             ],
+                        )
+                        if table:
+                            section.tables.append(table)
+
+                    anomalies = dataset.get("anomalies") or []
+                    if isinstance(anomalies, list) and anomalies:
+                        table = records_table(
+                            "Detected Statistical Anomalies (IQR Outliers)",
+                            [
+                                {
+                                    "column": str(a.get("column", "")),
+                                    "row": str(a.get("row_index", a.get("row", ""))),
+                                    "value": str(a.get("value", "")),
+                                    "bound": str(a.get("bound_exceeded", a.get("bound", ""))),
+                                    "threshold": str(a.get("threshold", "")),
+                                    "equipment_context": str(a.get("equipment", a.get("context", name))),
+                                    "note": str(a.get("note", "")),
+                                }
+                                for a in anomalies
+                                if isinstance(a, dict)
+                            ],
+                            note="Statistical outliers identified using 1.5*IQR threshold."
                         )
                         if table:
                             section.tables.append(table)
@@ -610,7 +632,6 @@ def report_adapter(context):
         )
 
     configured = os.getenv("REPORT_FORMATS")
-
     if configured:
         formats = [
             item.strip().lower()
@@ -624,10 +645,10 @@ def report_adapter(context):
         formats = []
 
         patterns = {
-            "docx": r"\b(word|docx|document)\b",
+            "docx": r"\b(word|docx|doc|document)\b",
             "pdf": r"\bpdf\b",
-            "xlsx": r"\b(excel|xlsx)\b",
-            "pptx": r"\b(powerpoint|ppt|pptx)\b",
+            "xlsx": r"\b(excel|xlsx|spreadsheet|workbook|sheets?)\b",
+            "pptx": r"\b(powerpoint|ppt|pptx|presentation|slides?|deck)\b",
         }
 
         for extension, pattern in patterns.items():
@@ -637,8 +658,32 @@ def report_adapter(context):
         if "approval note" in combined_text or "approval" in combined_text:
             formats.append("approval_note")
 
+        if any(term in combined_text for term in ("all formats", "complete report", "every format", "full deliverables")):
+            formats = ["docx", "pdf", "xlsx", "pptx"]
+        elif "data_analysis" in context.dependencies and any(
+            term in combined_text
+            for term in (
+                "management", "management-ready", "analysis report",
+                "recommendation", "recommendations", "charts", "deliverable",
+                "deliverables", "executive", "overview", "trends", "statistics", "dataset"
+            )
+        ):
+            # For data analysis management/executive reporting, produce the full suite of deliverables:
+            # XLSX (spreadsheet with KPIs, stats, anomalies), PPTX (presentation deck), DOCX (document)
+            for f in ["docx", "xlsx", "pptx"]:
+                if f not in formats:
+                    formats.append(f)
+
         if not formats:
-            formats = ["docx"]
+            try:
+                from app.config import settings
+                cfg = getattr(settings, "report_formats", None)
+                if cfg:
+                    formats = [item.strip().lower() for item in cfg.split(",") if item.strip()]
+            except Exception:
+                formats = []
+            if not formats:
+                formats = ["docx"]
 
     agent = ReportAgent()
 
